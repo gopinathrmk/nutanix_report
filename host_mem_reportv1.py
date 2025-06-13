@@ -1,3 +1,17 @@
+#!/usr/bin/env python3
+"""
+===============================================================================
+ Script Name   : host_mem_reportv1.py
+ Description   : It Pulls the memory usage of nodes using v1 and running remote ssh cmds
+ Author        : Gopinath Sekar
+ Created Date  : [2025-05-19]
+ Last Modified : [YYYY-MM-DD]
+ Version       : [v1.0.0]
+ Usage         :  python host_mem_reportv1.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky"
+ Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib paramiko
+===============================================================================
+"""
+
 import csv
 import argparse
 import requests
@@ -269,7 +283,7 @@ def get_host_ha_reserved_mem(pe_ip,username,passwd,host_uuid):
 
     cmd = r"links -dump http://0:2030 | grep -i master | awk -F '\\[5\\]' '{print $2}' | awk '{print $1}' | sed 's/.*/http:\/\/&\/sched/'"
     link = run_ssh_cmd(pe_ip=pe_ip,username=username,passwd=passwd,cmd=cmd) 
-    cmd = f"links -dump {link} | grep {host_uuid} | head -1 | awk -F '|' '{{print $10}}'"
+    cmd = f"links -dump {link} | grep {host_uuid} | head -1 | awk -F '|' '{{print $10}}'| awk '{{print $1}}'"
     ha_reserved_mem = run_ssh_cmd(pe_ip=pe_ip,username=username,passwd=passwd,cmd=cmd) 
     #print("ha_reserved_mem", ha_reserved_mem)
     if ha_reserved_mem.strip().isdigit():
