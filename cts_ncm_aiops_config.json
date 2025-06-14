@@ -24,13 +24,13 @@
       },      
       "Production": {
         "vcpu_ratio": 2,
-        "memory_ratio": 1,
+        "memory_ratio": 2,
         "storage_ratio": 2
       },
       "Development": {
         "vcpu_ratio": 4,
-        "memory_ratio": 2,
-        "storage_ratio": 4
+        "memory_ratio": 8,
+        "storage_ratio": 8
       }
     }
   }

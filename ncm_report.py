@@ -1,6 +1,18 @@
-import datetime
-import json
-import os
+#!/usr/bin/env python3
+"""
+===============================================================================
+ Script Name   : ncm_report.py
+ Description   : Generates VM and Host Inventory Reports
+ Author        : Gopinath Sekar
+ Created Date  : [2025-06-19]
+ Last Modified : [YYYY-MM-DD]
+ Version       : [v1.0.0]
+ Usage         : python ncm_report.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky"
+ Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib paramiko
+===============================================================================
+"""
+
+
 
 from ntnx_vmm_py_client import ApiClient as VMMClient
 from ntnx_vmm_py_client import Configuration as VMMConfiguration
@@ -17,14 +29,13 @@ from ntnx_clustermgmt_py_client.api import StorageContainersApi
 from ntnx_prism_py_client import ApiClient as CategoryClient  # type: ignore
 from ntnx_prism_py_client.api import CategoriesApi
 
-
+import datetime
 import argparse
 import getpass
 import csv
 from tabulate import tabulate
 from pathlib import Path
 import pprint
-
 import urllib3  # type: ignore
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -42,12 +53,6 @@ start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%
 GB_or_GiB = 1024
 cluster_threshold = 0.7
 pc_name = ""
-
-# config_file_path = os.path.join(os.path.dirname(__file__), "cts_ncm_aiops_config.json")
-# with open(config_file_path, "r") as config_file:
-#     config_data = json.load(config_file)
-#     tshirt_sizes = config_data["VM_TShirt_Sizes"]
-#     environment = config_data["Environment"]
 
 
 def initialize_vmm_api(api_server, username, password):
@@ -158,7 +163,7 @@ def get_cluster_stats(clusters_api,cluster):
     #print(f"Cluster stats: {cluster_stats}")
     #input("Press Enter to continue...")
 
-    cpuCapacityHz = cluster_stats.data.cpu_capacity_hz[0].value if cluster_stats.data.cpu_capacity_hz else 0 
+    cpuCapacityHz = cluster_stats.data.cpu_capacity_hz[0].value if cluster_stats.data.cpu_capacity_hz else 0
     cpuUsageHz = get_avg_value(cluster_stats.data.cpu_usage_hz)
     hypervisorCpuUsagePpm = get_avg_value(cluster_stats.data.hypervisor_cpu_usage_ppm)
     num_vcpu_used = round((hypervisorCpuUsagePpm * num_cpu_threads)/1000000)
@@ -286,107 +291,6 @@ def get_host_stats(clusters_api,cluster):
         host_stats_details_list.append(host_info)
 
     return host_stats_details_list
-
-
-def get_vm_info(vm_api,vm_stats_api,cluster,category_api):
-
-    vm_info_details_list = []
-    # Get all VMs in the cluster
-    vms = vm_api.list_vms(
-        _filter=f"cluster/extId eq '{cluster.ext_id}'",
-        _limit=100
-    )
-    total_vms_count = vms.metadata.total_available_results
-    #print(f"Total VMs in cluster: {total_vms_count}")
-    page_loop = (total_vms_count // 100) + 1
-    #print(f"Page Loop: {page_loop}")
-    
-    for page in range(page_loop):
-        # print(".")
-        vms = vm_api.list_vms(
-            _filter=f"cluster/extId eq '{cluster.ext_id}'",
-            _limit=100,
-            _page=page
-        )
-        if not vms.data:
-            break
-
-        for vm in vms.data:
-            print(".",end='', flush=True)
-            # Get memory stats for each VM using its ext_id
-            #print(f"VM Details: {vm}")
-            #input("Press Enter to continue...")
-            vm_ext_id = vm.ext_id
-
-            # Fetching VM INFO
-
-            #CPU and Memory allocated 
-            vm_vcpu_allocated = vm.num_sockets * vm.num_cores_per_socket * vm.num_threads_per_core 
-            vm_mem_allocated_bytes = vm.memory_size_bytes
-            vm_mem_allocated_gb = round(vm_mem_allocated_bytes/ (GB_or_GiB ** 3))
-
-            #VM IP Info
-            vm_num_nic = len(vm.nics) if vm.nics else 0
-            vm_ip_address_list = []
-
-            if vm_num_nic:
-                for nic in vm.nics:
-                    if nic.network_info and nic.network_info.ipv4_info:
-                        for ip_address in nic.network_info.ipv4_info.learned_ip_addresses:
-                            vm_ip_address_list.append(ip_address.value + str(ip_address.prefix_length))
-
-
-
-            #Disk Capacity
-            vm_disk_capacity_bytes = 0
-            if not vm.disks:
-                vm_disk_capacity_bytes = 0
-            else:
-                for disk in vm.disks:
-                    #print(type(disk.backing_info))
-                    if hasattr(disk.backing_info, "disk_size_bytes"):
-                        vm_disk_capacity_bytes += disk.backing_info.disk_size_bytes
-
-            vm_disk_capacity_gb = round(vm_disk_capacity_bytes/ (GB_or_GiB ** 3))
-
-            #NGT Info
-            OS = vm.guest_tools.guest_os_version if vm.guest_tools else "NA"
-            is_installed = vm.guest_tools.is_installed if vm.guest_tools else "No"
-
-            #Categories
-            category_list = []
-            if vm.categories:
-                for category in vm.categories:
-                    category_resp = category_api.get_category_by_id(category.ext_id)
-                    category_name = "{}:{}".format(category_resp.data.key , category_resp.data.value)
-                    category_list.append(category_name)
-                    
-
-            global pc_name
-            vm_info_details = {
-                "Name" :  vm.name,
-                "Power State" : vm.power_state,
-                "vCPU" : vm_vcpu_allocated,
-                "Memory (GB)" : vm_mem_allocated_gb,
-                "Disk Space(GB)" : vm_disk_capacity_gb,
-                "vNIC" : vm_num_nic,
-                "IP Address" : vm_ip_address_list,
-                "OS" : OS,
-                "NGT Installed" : is_installed ,
-                "Categories" : category_list,
-                "Parent Cluster" : cluster.name,
-                "PC " : pc_name
-
-            }
-            vm_info_details_list.append(vm_info_details)
-            #pprint.pprint(vm_info_details)
-
-        #pprint.pprint(vm_info_details_list)
-
-
-
-    return vm_info_details_list
-
 
 def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
 
@@ -605,42 +509,9 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
     return vm_info_details_list,vm_stats_details
 
 
-def get_cluster_details(clusters_api, vm_api, cluster):
-    # clusters = clusters_api.list_clusters()
-    # cluster_ext_id = None
-
-    # cluster = next((c for c in clusters.data if c.name == cluster_name), None)
-    # if not cluster:
-    #     raise ValueError(f"Cluster '{cluster_name}' not found.")
-
-    cluster_ext_id = cluster.ext_id
-
-    hosts = clusters_api.list_hosts_by_cluster_id(cluster_ext_id)
-    num_hosts = len(hosts.data)
-    print(f"Number of Hosts in Cluster: {num_hosts}")
-
-    # Get all Powered ON VMs in the cluster
-    vms = vm_api.list_vms(
-        _filter=f"powerState eq Vmm.Ahv.Config.PowerState'ON' and cluster/extId eq '{cluster_ext_id}'"
-    )
-    num_powered_on_vms = vms.metadata.total_available_results
-    print(f"Number of Powered ON VMs: {num_powered_on_vms}")
-
-    # Get all Powered Off VMs in the cluster
-    powered_off_vms = vm_api.list_vms(
-        _filter=f"powerState eq Vmm.Ahv.Config.PowerState'OFF' and cluster/extId eq '{cluster_ext_id}'"
-    )
-    num_powered_off_vms = powered_off_vms.metadata.total_available_results
-    print(f"Number of Powered OFF VMs: {num_powered_off_vms}")
-
-    return num_powered_on_vms, num_powered_off_vms, num_hosts
-
-
 def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,category_api):
     # This function calls and collect cluster level, vm level and host level information.
     #Then structure it in the output format as required.. 
-
-    #num_powered_on_vms, num_powered_off_vms, num_hosts = get_cluster_details(clusters_api, vmm_api, cluster)
 
     cluster_stats_details = get_cluster_stats(clusters_api,cluster)
     vm_info_details_list,vm_stats_details = get_vm_stats(vmm_api,vmm_stats_api,cluster,category_api)
@@ -667,7 +538,7 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
     return vm_inventory,host_inventory
 
 
-def write_to_file(list_of_dict,filename,mode,purpose):
+def write_to_file(list_of_dict,filename,mode,purpose=""):
     """
     Writes the script output to the CSV file 
     """
@@ -690,7 +561,7 @@ def write_filenames(output_files,filename):
             for output_file in output_files:
                 # print(output_file)
                 file.write(output_file+"\n")
-        print("Filename details have been written to '{}'\n".format(filename)) 
+        #print("Filename details have been written to '{}'\n".format(filename)) 
     except Exception as e :
         print(f"!!! An unexpected error occured : {e}")
         exit(1)

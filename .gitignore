@@ -1,5 +1,7 @@
 #output
 output/
+test_report.py
+functions_archive.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
