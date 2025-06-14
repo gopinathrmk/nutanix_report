@@ -7,15 +7,12 @@
  Created Date  : [2025-06-19]
  Last Modified : [YYYY-MM-DD]
  Version       : [v1.0.0]
- Usage         : ncm_remaining_vm.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky"
+ Usage         : ncm_remaining_vm.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky" --output_files_name <filename>
  Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib paramiko
+                 pip install ntnx_vmm_py_client ntnx_clustermgmt_py_client ntnx_prism_py_client
 ===============================================================================
 """
 
-
-import datetime
-import json
-import os
 
 from ntnx_vmm_py_client import ApiClient as VMMClient
 from ntnx_vmm_py_client import Configuration as VMMConfiguration
@@ -32,14 +29,15 @@ from ntnx_clustermgmt_py_client.api import StorageContainersApi
 from ntnx_prism_py_client import ApiClient as CategoryClient  # type: ignore
 from ntnx_prism_py_client.api import CategoriesApi
 
-
+import datetime
+import json
+import os
 import argparse
 import getpass
 import csv
 from tabulate import tabulate
 from pathlib import Path
 import pprint
-
 import urllib3  # type: ignore
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -135,21 +133,20 @@ def get_avg_list(list):
 def get_cluster_stats(clusters_api,cluster):
 
     cluster_stats_details = {}
-    
 
     #Fetching the number of cores in the cluster
     hosts = clusters_api.list_hosts_by_cluster_id(cluster.ext_id)
     cluster_hosts = [h for h in hosts.data if h.cluster.name == cluster.name]
     #print(f"Cluster hosts: {cluster_hosts}")
     cpu_details = []
-    num_cpu_threads = 0
+    num_vcpu = 0
     cpu_capacity_hz = 0
     for host in cluster_hosts:
         host_id = host.ext_id
         host_info = clusters_api.get_host_by_id(cluster.ext_id, host_id)
         #print(f"Host ID: {host_id}")
         #print(f"Host Info: {host_info}")
-        num_cpu_threads += host_info.data.number_of_cpu_threads
+        num_vcpu += host_info.data.number_of_cpu_threads
         #cpu_capacity_hz += host_info.data.cpu_capacity_hz
         cpu_details.append({
             "host_id": host_id,
@@ -174,71 +171,67 @@ def get_cluster_stats(clusters_api,cluster):
     #print(f"Cluster stats: {cluster_stats}")
     #input("Press Enter to continue...")
 
-    cpuCapacityHz = cluster_stats.data.cpu_capacity_hz[0].value if cluster_stats.data.cpu_capacity_hz else 0
-    cpuUsageHz = get_avg_value(cluster_stats.data.cpu_usage_hz)
-    hypervisorCpuUsagePpm = get_avg_value(cluster_stats.data.hypervisor_cpu_usage_ppm)
-    num_vcpu_used = round((hypervisorCpuUsagePpm * num_cpu_threads)/1000000)
-    num_vcpu_available = num_cpu_threads - num_vcpu_used
+    # cpuCapacityHz = cluster_stats.data.cpu_capacity_hz[0].value if cluster_stats.data.cpu_capacity_hz else 0
+    # cpuUsageHz = get_avg_value(cluster_stats.data.cpu_usage_hz)
+    hypervisor_cpu_usage_ppm = get_avg_value(cluster_stats.data.hypervisor_cpu_usage_ppm)
+    num_vcpu_used = round((hypervisor_cpu_usage_ppm * num_vcpu)/1000000)
+    num_vcpu_available = num_vcpu - num_vcpu_used
 
     memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
-    aggregateHypervisorMemoryUsagePpm = get_avg_value(cluster_stats.data.aggregate_hypervisor_memory_usage_ppm)
-    overallMemoryUsageBytes = get_avg_value(cluster_stats.data.overall_memory_usage_bytes)
-    memory_available_bytes = memory_capacity_bytes - overallMemoryUsageBytes
+    aggregate_hypervisor_memory_usage_ppm = get_avg_value(cluster_stats.data.aggregate_hypervisor_memory_usage_ppm)
+    overall_memory_usage_bytes = get_avg_value(cluster_stats.data.overall_memory_usage_bytes)
+
+    hypervisor_memory_usage_bytes =  round((aggregate_hypervisor_memory_usage_ppm/1000_000 * memory_capacity_bytes),2)
+    memory_available_bytes = memory_capacity_bytes - overall_memory_usage_bytes
 
     memory_capacity_gb = round(memory_capacity_bytes / (GB_or_GiB ** 3))
-    memory_used_gb = round(overallMemoryUsageBytes / (GB_or_GiB ** 3))
+    overall_memory_usage_gb = round(overall_memory_usage_bytes / (GB_or_GiB ** 3))
+    hypervisor_memory_usage_gb = round(hypervisor_memory_usage_bytes / (GB_or_GiB ** 3))
+    ha_reserved_memory_gb = round((overall_memory_usage_gb - hypervisor_memory_usage_gb),2)
     memory_available_gb  = round(memory_available_bytes / (GB_or_GiB ** 3))
-    memory_used_hypervisor_gb = round((aggregateHypervisorMemoryUsagePpm * memory_capacity_bytes/1000_000))/(GB_or_GiB ** 3)
-    
 
     storage_capacity_bytes = cluster_stats.data.storage_capacity_bytes[0].value
-    storageUsageBytes = get_avg_value(cluster_stats.data.storage_usage_bytes)
-    logicalStorageUsageBytes = get_avg_value(cluster_stats.data.logical_storage_usage_bytes)
-    # freePhysicalStorageBytes = get_avg_value(cluster_stats.data.free_physical_storage_bytes )
-    storage_available_bytes = logicalStorageUsageBytes - storageUsageBytes
+    logical_storage_usage_bytes = get_avg_value(cluster_stats.data.logical_storage_usage_bytes)
+    storage_usage_bytes = get_avg_value(cluster_stats.data.storage_usage_bytes)
+    free_physical_storage_bytes = get_avg_value(cluster_stats.data.free_physical_storage_bytes )
+    # storage_available_bytes = logical_storage_usage_bytes - storage_usage_bytes
 
-    storage_capacity_gb = round(logicalStorageUsageBytes / (GB_or_GiB ** 3))
-    storage_used_gb = round(storageUsageBytes / (GB_or_GiB ** 3))
-    storage_available_gb = round(storage_available_bytes / (GB_or_GiB ** 3))
+    storage_capacity_gb = round(storage_capacity_bytes / (GB_or_GiB ** 3))
+    logical_storage_usage_gb = round(logical_storage_usage_bytes / (GB_or_GiB ** 3))
+    storage_usage_gb = round(storage_usage_bytes / (GB_or_GiB ** 3))
+    free_physical_storage_gb = round(free_physical_storage_bytes / (GB_or_GiB ** 3))
 
 
     cluster_stats_details = {
-        # "cpuCapacityHz" : cpuCapacityHz,
-        # "cpuUsageHz" : cpuUsageHz,
-        # "hypervisorCpuUsagePpm" : hypervisorCpuUsagePpm,
-        # "memoryCapacityBytes" : memory_capacity_bytes,
-        # "aggregateHypervisorMemoryUsagePpm" : aggregateHypervisorMemoryUsagePpm,
-        # "overallMemoryUsageBytes" : overallMemoryUsageBytes,
-        # "storageCapacityBytes" : storage_capacity_bytes,
-        # "storageUsageBytes" : storageUsageBytes,
-        # "logicalStorageUsageBytes" : logicalStorageUsageBytes,
-        # "freePhysicalStorageBytes" : freePhysicalStorageBytes,
-        "vcpu_capacity" : num_cpu_threads,
+        "vcpu_capacity" : num_vcpu,
         "vcpu_used" : num_vcpu_used,
         "vcpu_available" : num_vcpu_available,
-        "memory_gb_capacity" : memory_capacity_gb,
-        "memory_gb_used" : memory_used_gb,
-        "memory_gb_available" : memory_available_gb,
-        "storage_gb_capacity" : storage_capacity_gb,
-        "storage_gb_used" : storage_used_gb,
-        "storage_gb_available" : storage_available_gb,
+        "memory_capacity_gb" : memory_capacity_gb,
+        "overall_memory_usage_gb" : overall_memory_usage_gb,
+        "hypervisor_memory_usage_gb": hypervisor_memory_usage_gb,
+        "ha_reserved_memory_gb" : ha_reserved_memory_gb,
+        "memory_available_gb" : memory_available_gb,
+        "storage_capacity_gb" : storage_capacity_gb,
+        "logical_storage_usage_gb" : logical_storage_usage_gb,
+        "storage_usage_gb" : storage_usage_gb,
+        "free_physical_storage_gb" : free_physical_storage_gb,
+        # "storage_gb_free" : storage_free_gb,
         "memory_capacity_bytes" : memory_capacity_bytes,
-        "memory_used_bytes" : overallMemoryUsageBytes,
+        "overall_memory_usage_bytes" : overall_memory_usage_bytes,
         "memory_available_bytes" : memory_available_bytes,
         "storage_capacity_bytes": storage_capacity_bytes,
-        "storage_used_bytes":  storageUsageBytes,
-        "storage_available_bytes" : storage_available_bytes,
-        "memory_used_hypervisor_gb": memory_used_hypervisor_gb
-
+        "logical_storage_usage_bytes" : logical_storage_usage_bytes,
+        "storage_used_bytes":  storage_usage_bytes,
+        "free_physical_storage_bytes" : free_physical_storage_bytes
     }
 
     return cluster_stats_details
 
 
-def get_host_stats(clusters_api,cluster): #tocomment
+def get_host_stats(clusters_api,cluster):
 
     total_num_vcpu = 0 
-    total_memory_size_gb = 0
+    total_memory_capacity_gb = 0
     total_disk_size_gb = 0 
     total_storage_capacity_gb = 0
     total_ha_reserved_memory_gb = 0
@@ -252,12 +245,12 @@ def get_host_stats(clusters_api,cluster): #tocomment
 
 #Start of host info 
         num_vcpu = host.number_of_cpu_threads 
-        memory_size_bytes = host.memory_size_bytes 
+        memory_capacity_bytes = host.memory_size_bytes 
         disk_size_bytes = 0
         for disk in host.disk:
             disk_size_bytes += disk.size_in_bytes 
 
-        memory_size_gb =  round(memory_size_bytes / (GB_or_GiB ** 3),2)
+        memory_capacity_gb =  round(memory_capacity_bytes / (GB_or_GiB ** 3),2)
         disk_size_gb = round(disk_size_bytes / (GB_or_GiB ** 3),2)
 
 #End of host info 
@@ -279,26 +272,33 @@ def get_host_stats(clusters_api,cluster): #tocomment
         # cpu_capacity_hz = get_avg_value(host_stats.data.cpu_capacity_hz)
         # cpu_usage_hz = get_avg_value(host_stats.cpu_usage_hz)
         hypervisor_cpu_usage_ppm = get_avg_value(host_stats.data.hypervisor_cpu_usage_ppm)
+        num_vcpu_used = round((hypervisor_cpu_usage_ppm * num_vcpu)/1000000)
+        num_vcpu_available = num_vcpu - num_vcpu_used
 
-        overall_memory_usage_ppm = get_avg_value(host_stats.data.overall_memory_usage_ppm)
         aggregate_hypervisor_memory_usage_ppm = get_avg_value(host_stats.data.aggregate_hypervisor_memory_usage_ppm)
-        
-        logical_storage_usage_bytes = get_avg_value(host_stats.data.logical_storage_usage_bytes)
+        overall_memory_usage_bytes = get_avg_value(host_stats.data.overall_memory_usage_bytes)
+
+        hypervisor_memory_usage_bytes =  round((aggregate_hypervisor_memory_usage_ppm/1000_000 * memory_capacity_bytes),2)
+        memory_available_bytes = memory_capacity_bytes - overall_memory_usage_bytes
+
+        overall_memory_usage_gb =  round(overall_memory_usage_bytes / (GB_or_GiB ** 3),2)
+        hypervisor_memory_usage_gb =  round(hypervisor_memory_usage_bytes / (GB_or_GiB ** 3),2)
+        ha_reserved_memory_gb = overall_memory_usage_gb - hypervisor_memory_usage_gb
+        memory_available_gb  = round(memory_available_bytes / (GB_or_GiB ** 3))
+
         storage_capacity_bytes = get_avg_value(host_stats.data.storage_capacity_bytes)
+        logical_storage_usage_bytes = get_avg_value(host_stats.data.logical_storage_usage_bytes)
         storage_usage_bytes = get_avg_value(host_stats.data.storage_usage_bytes)
         free_physical_storage_bytes = get_avg_value(host_stats.data.free_physical_storage_bytes)
 
-        logical_storage_usage_gb =  round(logical_storage_usage_bytes / (GB_or_GiB ** 3),2)
         storage_capacity_gb =  round(storage_capacity_bytes / (GB_or_GiB ** 3),2)
+        logical_storage_usage_gb =  round(logical_storage_usage_bytes / (GB_or_GiB ** 3),2)
         storage_usage_gb =  round(storage_usage_bytes / (GB_or_GiB ** 3),2)
         free_physical_storage_gb =  round(free_physical_storage_bytes / (GB_or_GiB ** 3),2)
 
 
         nics_physical = clusters_api.list_host_nics_by_host_id(cluster.ext_id,host.ext_id)
 
-        hypervisor_memory_usage_gb =  round((aggregate_hypervisor_memory_usage_ppm/1000_000 * host.memory_size_bytes) / (GB_or_GiB ** 3),2)
-        overall_memory_usage_gb =  round((overall_memory_usage_ppm/1000_000 * host.memory_size_bytes) / (GB_or_GiB ** 3),2)
-        ha_reserved_memory_gb = round((overall_memory_usage_gb - hypervisor_memory_usage_gb),2)
 
         host_info = {
             "name" : host.host_name ,
@@ -308,46 +308,45 @@ def get_host_stats(clusters_api,cluster): #tocomment
             "model" : host.block_model, #no Server band 
             "cpu_model" : host.cpu_model,
             "num_of_sockets" : host.number_of_cpu_sockets,
-            "num_vcpu " : num_vcpu,
-            "memory_size_gb" : memory_size_gb ,
-            "disk_size_gb" : disk_size_gb,
-            "storage_capacity_gb" : storage_capacity_gb,
+            "num_vcpu" : num_vcpu,
             "cpu_usage_percent" : round(hypervisor_cpu_usage_ppm/10000,2),
-            "hypervisor_memory_usage_gb" : hypervisor_memory_usage_gb,
+            "num_vcpu_available" : num_vcpu_available,
+            "memory_capacity_gb" : memory_capacity_gb ,
             "overall_memory_usage_gb" : overall_memory_usage_gb,
+            "hypervisor_memory_usage_gb" : hypervisor_memory_usage_gb,
             "ha_reserved_memory_gb" : ha_reserved_memory_gb,
+            # "disk_size_gb" : disk_size_gb,
+            "storage_capacity_gb" : storage_capacity_gb,
+            "logical_storage_usage_gb" : logical_storage_usage_gb,
+            "storage_usage_gb" : storage_usage_gb,
             "free_physical_storage_gb" : free_physical_storage_gb,
-            "nic_count " : len(nics_physical.data),
+            "nic_count" : len(nics_physical.data),
             "no_active_vm" :  host.hypervisor.number_of_vms,
             "pc_name" : pc_name #for datacenter
         }
 
-
         total_num_vcpu += num_vcpu
-        total_memory_size_gb += memory_size_gb
+        total_memory_capacity_gb += memory_capacity_gb
         total_disk_size_gb += disk_size_gb
         total_storage_capacity_gb += storage_capacity_gb
         total_ha_reserved_memory_gb += ha_reserved_memory_gb
-
-
 
         host_stats_details_list.append(host_info)
     
     all_host_stats_details = {
         "total_num_vcpu" : total_num_vcpu,
-        "total_memory_size_gb" : total_memory_size_gb,
+        "total_memory_capacity_gb" : total_memory_capacity_gb,
         "total_disk_size_gb" : total_disk_size_gb,
         "total_storage_capacity_gb" : total_storage_capacity_gb,
         "total_ha_reserved_memory_gb" : total_ha_reserved_memory_gb
-     
     }
 
-    return all_host_stats_details,host_stats_details_list
+    return host_stats_details_list,all_host_stats_details
 
 
 def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
 
-    vm_info_details_list = []    
+    vm_stats_details_list = []    
     total_vms_vcpu_allocated = 0
     total_vms_mem_allocated_bytes = 0
     total_vms_disk_allocated_bytes = 0
@@ -527,24 +526,41 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
             total_no_vms += 1
 
             global pc_name
-            vm_info_details = {
-                "Name" :  vm.name,
-                "Power State" : vm.power_state,
-                "vCPU" : vm_vcpu_allocated,
-                "Memory (GB)" : vm_mem_allocated_gb,
-                "Disk Space(GB)" : vm_disk_capacity_gb,
-                "vNIC" : vm_num_nic,
-                "IP Address" : vm_ip_address_list,
-                "OS" : OS,
-                "NGT Installed" : is_installed ,
-                "Categories" : category_list,
-                "Parent Cluster" : cluster.name,
+            # vm_stats_details = {
+            #     "Name" :  vm.name,
+            #     "Power State" : vm.power_state,
+            #     "vCPU" : vm_vcpu_allocated,
+            #     "Memory (GB)" : vm_mem_allocated_gb,
+            #     "Disk Space(GB)" : vm_disk_capacity_gb,
+            #     "vNIC" : vm_num_nic,
+            #     "IP Address" : vm_ip_address_list,
+            #     "OS" : OS,
+            #     "NGT Installed" : is_installed ,
+            #     "Categories" : category_list,
+            #     "Parent Cluster" : cluster.name,
+            #     "PC " : pc_name,
+            #     "host_ext_id" : host_ext_id,
+            #     "memory_usage" : vm_mem_consumed_gb
+            # }
+
+            vm_stats_details = {
+                "name" :  vm.name,
+                "cluster_name" : cluster.name,
+                "power_state" : vm.power_state,
+                "ip" : vm_ip_address_list,
+                "num_vcpu_allocated" : vm_vcpu_allocated,
+                "num_vcpu_consumed" : vm_vcpu_consumed,
+                "num_vcpu_available" : vm_vcpu_allocated - vm_vcpu_consumed,
+                "memory_allocated_gb" : vm_mem_allocated_gb,
+                "memory_usage_gb" : vm_mem_consumed_gb,
+                "hypervisor_memory_usage" : vm_hyper_mem_consumed_gb,
+                "storage_allocated_gb" : vm_disk_capacity_gb,
+                "storage_usage_gb" : vm_disk_consumed_gb, #todo not working
                 "PC " : pc_name,
                 "host_ext_id" : host_ext_id,
-                "memory_usage" : vm_mem_consumed_gb
-
             }
-            vm_info_details_list.append(vm_info_details)
+
+            # vm_stats_details_list.append(vm_stats_details) Use only for troubleshooting
 
     all_vm_stats_details = {
         "total_vms_vcpu_allocated" : total_vms_vcpu_allocated,
@@ -562,7 +578,7 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
         "total_no_vms" : total_no_vms
     }
 
-    return all_vm_stats_details,vm_info_details_list
+    return all_vm_stats_details
 
 
 def get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type="demand"):
@@ -573,13 +589,13 @@ def get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type
         available_resources = {
             "vCPU": cluster_stats_details.get("vcpu_available") * oc_ratio.get("vcpu_ratio") * cluster_threshold,
             "memory_bytes": cluster_stats_details.get("memory_available_bytes") * oc_ratio.get("memory_ratio") * cluster_threshold,
-            "disk_bytes": cluster_stats_details.get("storage_available_bytes") * oc_ratio.get("storage_ratio") * cluster_threshold
+            "disk_bytes": cluster_stats_details.get("free_physical_storage_bytes") * oc_ratio.get("storage_ratio") * cluster_threshold
         }
     elif type == "allocation":
         resource_capacity = {
             "vCPU": cluster_stats_details.get("vcpu_capacity") * oc_ratio.get("vcpu_ratio") * cluster_threshold,
-            "memory_gb": cluster_stats_details.get("memory_gb_capacity") * oc_ratio.get("memory_ratio") * cluster_threshold,
-            "disk_gb": cluster_stats_details.get("storage_gb_capacity") * oc_ratio.get("storage_ratio") * cluster_threshold
+            "memory_gb": cluster_stats_details.get("memory_capacity_gb") * oc_ratio.get("memory_ratio") * cluster_threshold,
+            "disk_gb": cluster_stats_details.get("logical_storage_usage_gb") * oc_ratio.get("storage_ratio") * cluster_threshold
         }    
 
         resource_allocated = {
@@ -615,54 +631,22 @@ def get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type
 
 
 def get_report_interim(cluster_stats_details,all_host_stats_details,all_vm_stats_details): #tocomment
-
-    report_cpu = {
-        "Physical Capacity CPU" : all_host_stats_details.get("total_num_vcpu"),
-        "Logical Capacity CPU  " : cluster_stats_details.get("vcpu_capacity"),
-        "Allocated Capacity CPU" : all_vm_stats_details.get("total_vms_vcpu_allocated"),
-        "Consumed Capacity CPU " : cluster_stats_details.get("vcpu_used"),
-        "Free Capcity CPU " : cluster_stats_details.get("vcpu_available")
-    }
-
-    # print( cluster_stats_details.get("memory_gb_used") , cluster_stats_details.get("memory_used_hypervisor_gb"))
-
-    report_mem = {
-    "Physical Capacity MEM" : all_host_stats_details.get("total_memory_size_gb"),
-    "Logical Capacity MEM" : cluster_stats_details.get("memory_gb_capacity"),
-    "Allocated Capacity MEM" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
-    "HA Reservation MEM - host " : all_vm_stats_details.get("total_ha_reserved_memory_gb"),
-    "HA Reservation MEM - clu " : cluster_stats_details.get("memory_gb_used") - cluster_stats_details.get("memory_used_hypervisor_gb"),
-    "Consumed Capacity MEM-Actual" : cluster_stats_details.get("memory_used_hypervisor_gb"),
-    "Consumed Capacity MEM-Actual(VM)" : all_vm_stats_details.get("total_vms_memory_consumed_gb"),
-    "Consumed Capacity MEM " : cluster_stats_details.get("memory_gb_used"),
-    "Free Capcity MEM" : cluster_stats_details.get("vcpu_available"),
-    }
-
-    report_storage = {
-    "Physical Capacity Stor" : str(all_host_stats_details.get("total_disk_size_gb")) + str(all_host_stats_details.get("total_storage_capacity_gb")) ,
-    "Logical Capacity Stor" : cluster_stats_details.get("storage_gb_capacity"),
-    "Allocated Capacity Stor" : all_vm_stats_details.get("total_vms_storage_gb_allocated"),
-    "Consumed Capacity Stor-Actual" : cluster_stats_details.get("storage_gb_used"),
-    "Consumed Capacity Stor-Actual(VM)" : all_vm_stats_details.get("total_vms_disk_consumed_gb"),
-    "Free Capcity Stor" : cluster_stats_details.get("storage_gb_available")
-    }
-
+    # This is used for troubleshooting 
     filename ="/home/rocky/nutanix_report/output/interim-report"
-    write_to_file(list_of_dict=[report_cpu],filename=filename,mode='a',purpose="interim-report")
-    write_to_file(list_of_dict=[report_mem],filename=filename,mode='a',purpose="interim-report")
-    write_to_file(list_of_dict=[report_storage],filename=filename,mode='a',purpose="interim-report")
-
+    write_to_file(cluster_stats_details,filename=filename,mode='a',purpose="interim-report")
+    write_to_file(all_host_stats_details,filename=filename,mode='a',purpose="interim-report")
+    write_to_file(all_vm_stats_details,filename=filename,mode='a',purpose="interim-report")
 
 
 def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,category_api):
-
-    #num_powered_on_vms, num_powered_off_vms, num_hosts = get_cluster_details(clusters_api, vmm_api, cluster)
+    # This function calls and collect cluster level, vm level and host level information.
+    #Then structure it in the output format as required.. 
 
     cluster_stats_details = get_cluster_stats(clusters_api,cluster)
-    all_vm_stats_details,vm_info_details_list = get_vm_stats(vmm_api,vmm_stats_api,cluster,category_api)
-    all_host_stats_details,host_stats_details_list = get_host_stats(clusters_api,cluster) #tocomment
-    
-    get_report_interim(cluster_stats_details,all_host_stats_details,all_vm_stats_details) #tocomment
+    all_vm_stats_details = get_vm_stats(vmm_api,vmm_stats_api,cluster,category_api)
+
+    # host_stats_details_list,all_host_stats_details = get_host_stats(clusters_api,cluster) #tocomment
+    # get_report_interim([cluster_stats_details],host_stats_details_list,vm_stats_details_list) #troubleshooting
 
     remaining_vm_list = {"demand":{},"allocation":{} }
 
@@ -670,24 +654,38 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
         remaining_vm_list["demand"][env_name] = get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type="demand")
         remaining_vm_list["allocation"][env_name] = get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type="allocation")
 
-    report =  []
-    resources = ["vcpu","memory_gb","storage_gb"]
+
+#Preparing  resource Report
+    report_resources =  []
+
+    report_resources.append({
+        "Cluster Name" : cluster.name ,
+        "vcpu Capacity" : cluster_stats_details.get("vcpu_capacity"),
+        "vcpu Allocated" : all_vm_stats_details.get("total_vms_vcpu_allocated"),
+        "vcpu Consumed" : cluster_stats_details.get("vcpu_used"),
+        "vcpu Free" : cluster_stats_details.get("vcpu_available"),
+        "Memory Capacity (GiB)" : cluster_stats_details.get("memory_capacity_gb"),
+        "Memory Allocated (GiB)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
+        "Memory Overall Consumed (GiB)" : cluster_stats_details.get("overall_memory_usage_gb"),
+        "Memory Hypervisor Consumed (GiB)" : cluster_stats_details.get("hypervisor_memory_usage_gb"),
+        "Memory HA Reservation Consumed (GiB)" : cluster_stats_details.get("ha_reserved_memory_gb"),
+#        "Memory Consumed - Actual (GB)" : all_vm_stats_details.get("total_vms_memory_consumed_gb"),
+        "Memory Free (GiB)" :cluster_stats_details.get("memory_available_gb"),
+        "Storage Physcial Capacity (GiB)" : cluster_stats_details.get("storage_capacity_gb"),
+        "Storage Logical Capacity (GiB)" : cluster_stats_details.get("logical_storage_usage_gb"),
+        "Storage Allocated (GiB) " : all_vm_stats_details.get("total_vms_storage_gb_allocated"),
+        "Storage Consumed (GiB)" :  cluster_stats_details.get("storage_usage_gb"),
+        "Storage Free (GiB)" :  cluster_stats_details.get("free_physical_storage_gb")
+    })
+
+#Preparing Remaining VM Report :
+    report_remaining_vm =  []
     env_names  = list(environment.keys())
 
     for i  in range(3):
-        resource = resources[i]
         env = env_names[i]
-        unit = " vcpu " if resource == "vcpu" else " GiB"
-        report.append({
+        report_remaining_vm.append({
             "Cluster Name" : cluster.name ,
-            "Resource" : resource.split(sep="_")[0],
-            "Capacity " : str(cluster_stats_details.get(resource+"_capacity")) + unit ,
-            "Allocated " : str(all_vm_stats_details.get("total_vms_"+ resource+"_allocated")) + unit,
-            "Allocated %" :str(round( all_vm_stats_details.get("total_vms_"+ resource+"_allocated")/cluster_stats_details.get(resource+"_capacity") * 100,2)) + "%",
-            "Consumed/Demand " : str(cluster_stats_details.get(resource+"_used")) + unit ,
-            "Consumed/Demand %" : str(round( cluster_stats_details.get(resource+"_used")/cluster_stats_details.get(resource+"_capacity") * 100,2)) + "%",
-            "Available " : str(cluster_stats_details.get(resource+"_available")) + unit,
-            "Available %" : str(round( cluster_stats_details.get(resource+"_available")/cluster_stats_details.get(resource+"_capacity") * 100,2)) + "%",
             "Environment" : env ,
             "Small [Demand]" : remaining_vm_list.get("demand").get(env).get("Small"),
             "Medium [Demand]" : remaining_vm_list.get("demand").get(env).get("Medium"),
@@ -697,9 +695,9 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
             "Large [Allocation]" : remaining_vm_list.get("allocation").get(env).get("Large")
         })
 
+
     # pprint.pprint(remaining_vm_list)
-    #return cluster_stats_details,vm_stats_details,remaining_vm_list
-    return report 
+    return report_resources ,report_remaining_vm
 
 
 def write_to_file(list_of_dict,filename,mode,purpose=""):
@@ -763,25 +761,24 @@ def main():
             pc_name = cluster.name
             break
     
-    print("Fetching Details for Prism Central: {} ".format(pc_name))
+    if output_path.endswith("/"):
+        output_path = output_path[:-1]
+    filename_resources = Path(output_path + "/PC_" + pc_name +  "_resources_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+    filename_remaining_vm = Path(output_path + "/PC_" + pc_name +  "_remaining_vm_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+    output_files_name = Path(output_path + "/" +args.output_files_name)            
+    filenames = [str(filename_resources),str(filename_remaining_vm)]
+    write_filenames(filenames,filename=output_files_name)
 
+    print("Fetching Details for Prism Central: {} ".format(pc_name))
     for cluster in clusters.data :
         if 'AOS' in cluster.config.cluster_function:
             print("\tFetching Details for Cluster: {} ".format(cluster.name))
-            report = get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,category_api)
-
+            report_resources ,report_remaining_vm = get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,category_api)
             print("")
-            #print(tabulate(report, headers="keys", tablefmt="grid"))
 
-            if output_path.endswith("/"):
-                output_path = output_path[:-1]
-            #filename_cluster = Path(output_path + "/" +  cluster.name + "_remaining_vm_" + current_time.strftime("%Y-%m-%d-%H_%M") + ".csv")
-            filename = Path(output_path + "/PC_" + pc_name +  "_remaining_vm_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
-            output_files_name = Path(output_path + "/" +args.output_files_name)            
-            filenames = [str(filename)]
-            #write_to_file(list_of_dict=report,filename=filename_cluster,mode='w')
-            write_to_file(list_of_dict=report,filename=filename,mode='a',purpose="Remaining VM")
-            write_filenames(filenames,filename=output_files_name)
+            #Writing both the reports to files
+            write_to_file(list_of_dict=report_resources,filename=filename_resources,mode='a',purpose="Cluster Resources")
+            write_to_file(list_of_dict=report_remaining_vm,filename=filename_remaining_vm,mode='a',purpose="Remaining VM")
             
 
 if __name__ == "__main__":
