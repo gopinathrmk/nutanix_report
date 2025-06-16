@@ -52,7 +52,7 @@ end_time = (current_time ).strftime("%Y-%m-%dT%H:%M:%SZ")
 # end_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")  
 start_time = (current_time - datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
-GB_or_GiB = 1024
+GB_or_GiB = 1000
 cluster_threshold = 0.7
 pc_name = ""
 
@@ -677,18 +677,18 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
         "vcpu Allocated" : all_vm_stats_details.get("total_vms_vcpu_allocated"),
         "vcpu Consumed" : cluster_stats_details.get("vcpu_used"),
         "vcpu Free" : cluster_stats_details.get("vcpu_available"),
-        "Memory Capacity (GiB)" : cluster_stats_details.get("memory_capacity_gb"),
-        "Memory Allocated (GiB)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
-        "Memory Overall Consumed (GiB)" : cluster_stats_details.get("overall_memory_usage_gb"),
-        "Memory Hypervisor Consumed (GiB)" : cluster_stats_details.get("hypervisor_memory_usage_gb"),
-        "Memory HA Reservation Consumed (GiB)" : cluster_stats_details.get("ha_reserved_memory_gb"),
+        "Memory Capacity (GB)" : cluster_stats_details.get("memory_capacity_gb"),
+        "Memory Allocated (GB)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
+        "Memory Overall Consumed (GB)" : cluster_stats_details.get("overall_memory_usage_gb"),
+        # "Memory Hypervisor Consumed (GB)" : cluster_stats_details.get("hypervisor_memory_usage_gb"),
+        # "Memory HA Reservation Consumed (GB)" : cluster_stats_details.get("ha_reserved_memory_gb"),
 #        "Memory Consumed - Actual (GB)" : all_vm_stats_details.get("total_vms_memory_consumed_gb"),
-        "Memory Free (GiB)" :cluster_stats_details.get("memory_available_gb"),
-        "Storage Physcial Capacity (GiB)" : cluster_stats_details.get("storage_capacity_gb"),
-        "Storage Logical Capacity (GiB)" : cluster_stats_details.get("logical_storage_usage_gb"),
-        "Storage Allocated (GiB) " : all_vm_stats_details.get("total_vms_storage_gb_allocated"),
-        "Storage Consumed (GiB)" :  cluster_stats_details.get("storage_usage_gb"),
-        "Storage Logical Free (GiB)" :  cluster_stats_details.get("free_logical_storage_gb")
+        "Memory Free (GB)" :cluster_stats_details.get("memory_available_gb"),
+        # "Storage Physcial Capacity (GB)" : cluster_stats_details.get("storage_capacity_gb"),
+        "Storage Logical Capacity (GB)" : cluster_stats_details.get("logical_storage_usage_gb"),
+        "Storage Allocated (GB) " : all_vm_stats_details.get("total_vms_storage_gb_allocated"),
+        "Storage Consumed (GB)" :  cluster_stats_details.get("storage_usage_gb"),
+        "Storage Logical Free (GB)" :  cluster_stats_details.get("free_logical_storage_gb")
         # "Storage Free (GiB)" :  cluster_stats_details.get("free_physical_storage_gb")
     })
 

@@ -50,7 +50,7 @@ start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%
 # end_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")  
 # start_time = (current_time - datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
-GB_or_GiB = 1024
+GB_or_GiB = 1000
 cluster_threshold = 0.7
 pc_name = ""
 filename_vm = ""
@@ -525,8 +525,8 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 "Name" :  vm.name,
                 "Power State" : vm.power_state,
                 "vCPU" : vm_vcpu_allocated,
-                "Memory (GiB)" : vm_mem_allocated_gb,
-                "Disk Space(GiB)" : vm_disk_capacity_gb,
+                "Memory (GB)" : vm_mem_allocated_gb,
+                "Disk Space(GB)" : vm_disk_capacity_gb,
                 "vNIC" : vm_num_nic,
                 "IP Address" : vm_ip_address_list,
                 "OS" : OS,
@@ -584,11 +584,11 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
             "Physical CPU's" : host_info.get("num_of_sockets") ,
             "Total CPU Cores " : host_info.get("num_vcpu") ,
             "CPU Usage %" : round(host_info.get("cpu_usage_percent")) ,
-            "Total Memory (GiB)" : round(host_info.get("memory_capacity_gb")) ,
+            "Total Memory (GB)" : round(host_info.get("memory_capacity_gb")) ,
             "Memory Usage %" : round(host_info.get("overall_memory_usage_gb")/host_info.get("memory_capacity_gb") * 100) ,
-            "HA Reserved Memory (GiB)" : round(host_info.get("ha_reserved_memory_gb")),
-            "Total Capacity (GiB)" :round(host_info.get("storage_capacity_gb")) ,
-            "Free Space (GiB)" : round(host_info.get("free_physical_storage_gb")) ,
+            "HA Reserved Memory (GB)" : round(host_info.get("ha_reserved_memory_gb")),
+            "Total Capacity (GB)" :round(host_info.get("storage_capacity_gb")) ,
+            "Free Space (GB)" : round(host_info.get("free_physical_storage_gb")) ,
             #"Hypervisor Version " : "", #couldn't get 
             "Nic Count " : host_info.get("nic_count") ,
             "Active VMs" :  host_info.get("no_active_vm") ,
