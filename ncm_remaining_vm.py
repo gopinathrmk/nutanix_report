@@ -200,13 +200,13 @@ def get_cluster_stats(clusters_api,cluster):
     logical_storage_usage_bytes = get_avg_value(cluster_stats.data.logical_storage_usage_bytes)
     storage_usage_bytes = get_avg_value(cluster_stats.data.storage_usage_bytes)
     free_physical_storage_bytes = get_avg_value(cluster_stats.data.free_physical_storage_bytes )
-    # storage_available_bytes = logical_storage_usage_bytes - storage_usage_bytes
+    free_logical_storage_bytes = logical_storage_usage_bytes - storage_usage_bytes
 
     storage_capacity_gb = round(storage_capacity_bytes / (GB_or_GiB ** 3))
     logical_storage_usage_gb = round(logical_storage_usage_bytes / (GB_or_GiB ** 3))
     storage_usage_gb = round(storage_usage_bytes / (GB_or_GiB ** 3))
     free_physical_storage_gb = round(free_physical_storage_bytes / (GB_or_GiB ** 3))
-
+    free_logical_storage_gb = logical_storage_usage_gb - storage_usage_gb
 
     cluster_stats_details = {
         "vcpu_capacity" : num_vcpu,
@@ -221,6 +221,7 @@ def get_cluster_stats(clusters_api,cluster):
         "logical_storage_usage_gb" : logical_storage_usage_gb,
         "storage_usage_gb" : storage_usage_gb,
         "free_physical_storage_gb" : free_physical_storage_gb,
+        "free_logical_storage_gb" : free_logical_storage_gb,
         # "storage_gb_free" : storage_free_gb,
         "memory_capacity_bytes" : memory_capacity_bytes,
         "overall_memory_usage_bytes" : overall_memory_usage_bytes,
@@ -228,7 +229,8 @@ def get_cluster_stats(clusters_api,cluster):
         "storage_capacity_bytes": storage_capacity_bytes,
         "logical_storage_usage_bytes" : logical_storage_usage_bytes,
         "storage_used_bytes":  storage_usage_bytes,
-        "free_physical_storage_bytes" : free_physical_storage_bytes
+        "free_physical_storage_bytes" : free_physical_storage_bytes,
+        "free_logical_storage_bytes" : free_logical_storage_bytes
     }
 
     return cluster_stats_details
@@ -301,6 +303,7 @@ def get_host_stats(clusters_api,cluster):
         logical_storage_usage_gb =  round(logical_storage_usage_bytes / (GB_or_GiB ** 3),2)
         storage_usage_gb =  round(storage_usage_bytes / (GB_or_GiB ** 3),2)
         free_physical_storage_gb =  round(free_physical_storage_bytes / (GB_or_GiB ** 3),2)
+        free_logical_storage_gb = logical_storage_usage_gb - storage_usage_gb
 
 
         nics_physical = clusters_api.list_host_nics_by_host_id(cluster.ext_id,host.ext_id)
@@ -326,6 +329,7 @@ def get_host_stats(clusters_api,cluster):
             "logical_storage_usage_gb" : logical_storage_usage_gb,
             "storage_usage_gb" : storage_usage_gb,
             "free_physical_storage_gb" : free_physical_storage_gb,
+            "free_logical_storage_gb" : free_logical_storage_gb,
             "nic_count" : len(nics_physical.data),
             "no_active_vm" :  host.hypervisor.number_of_vms,
             "pc_name" : pc_name #for datacenter
@@ -596,7 +600,7 @@ def get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type
         available_resources = {
             "vCPU": cluster_stats_details.get("vcpu_available") * oc_ratio.get("vcpu_ratio") * cluster_threshold,
             "memory_bytes": cluster_stats_details.get("memory_available_bytes") * oc_ratio.get("memory_ratio") * cluster_threshold,
-            "disk_bytes": cluster_stats_details.get("free_physical_storage_bytes") * oc_ratio.get("storage_ratio") * cluster_threshold
+            "disk_bytes": cluster_stats_details.get("free_logical_storage_bytes") * oc_ratio.get("storage_ratio") * cluster_threshold
         }
     elif type == "allocation":
         resource_capacity = {
@@ -684,7 +688,8 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
         "Storage Logical Capacity (GiB)" : cluster_stats_details.get("logical_storage_usage_gb"),
         "Storage Allocated (GiB) " : all_vm_stats_details.get("total_vms_storage_gb_allocated"),
         "Storage Consumed (GiB)" :  cluster_stats_details.get("storage_usage_gb"),
-        "Storage Free (GiB)" :  cluster_stats_details.get("free_physical_storage_gb")
+        "Storage Logical Free (GiB)" :  cluster_stats_details.get("free_logical_storage_gb")
+        # "Storage Free (GiB)" :  cluster_stats_details.get("free_physical_storage_gb")
     })
 
 #Preparing Remaining VM Report :
