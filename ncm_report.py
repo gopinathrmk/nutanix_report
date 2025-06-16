@@ -670,9 +670,12 @@ def main():
     global filename_vm
     filename_vm = Path(output_path + "/PC_" +  pc_name + "_vm_inventory_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
     filename_host = Path(output_path + "/PC_" +  pc_name + "_host_inventory_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
-    output_files_name = Path(output_path + "/" +args.output_files_name)
-    filenames = [str(filename_vm) , str(filename_host)]    
-    write_filenames(filenames,filename=output_files_name)
+
+    output_files_name = ""
+    if args.output_files_name:
+        output_files_name = Path(output_path + "/" +args.output_files_name)
+        filenames = [str(filename_vm) , str(filename_host)]    
+        write_filenames(filenames,filename=output_files_name)
 
     print("Fetching Details for Prism Central: {} ".format(pc_name))
 

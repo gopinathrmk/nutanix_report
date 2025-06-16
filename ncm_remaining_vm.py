@@ -737,7 +737,7 @@ def main():
     parser.add_argument("--pc_user", required=True, help="Prism Central Username")
     parser.add_argument("--pc_secret", required=True, help="Prism Central Password") 
     parser.add_argument('--output_path', required=True, help='Path of output file')
-    parser.add_argument('--output_files_name', required=True, help='File to copy the output filenames')
+    parser.add_argument('--output_files_name', required=False, help='File to copy the output filenames')
 
     args = parser.parse_args()
 
@@ -765,9 +765,12 @@ def main():
         output_path = output_path[:-1]
     filename_resources = Path(output_path + "/PC_" + pc_name +  "_resources_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
     filename_remaining_vm = Path(output_path + "/PC_" + pc_name +  "_remaining_vm_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
-    output_files_name = Path(output_path + "/" +args.output_files_name)            
-    filenames = [str(filename_resources),str(filename_remaining_vm)]
-    write_filenames(filenames,filename=output_files_name)
+
+    output_files_name = ""
+    if args.output_files_name:
+        output_files_name = Path(output_path + "/" +args.output_files_name)  
+        filenames = [str(filename_resources),str(filename_remaining_vm)]
+        write_filenames(filenames,filename=output_files_name) 
 
     print("Fetching Details for Prism Central: {} ".format(pc_name))
     for cluster in clusters.data :
