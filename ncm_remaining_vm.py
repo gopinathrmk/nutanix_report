@@ -47,10 +47,10 @@ sampling_interval = 3600*24  # in seconds
 
 current_time = datetime.datetime.now(datetime.timezone.utc)  # Use timezone-aware UTC datetime
 end_time = (current_time ).strftime("%Y-%m-%dT%H:%M:%SZ")  
-start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ") 
+# start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
 # end_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")  
-# start_time = (current_time - datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ") 
+start_time = (current_time - datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
 GB_or_GiB = 1024
 cluster_threshold = 0.7
@@ -177,7 +177,13 @@ def get_cluster_stats(clusters_api,cluster):
     num_vcpu_used = round((hypervisor_cpu_usage_ppm * num_vcpu)/1000000)
     num_vcpu_available = num_vcpu - num_vcpu_used
 
-    memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
+    if cluster_stats.data.memory_capacity_bytes :
+        # print(cluster_stats.data.memory_capacity_bytes)
+        memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value
+    else:
+        print("Unable to Fetch Memory Capacity. Adjust the sampling range and frequency !!!")    
+        exit(1)
+    # memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
     aggregate_hypervisor_memory_usage_ppm = get_avg_value(cluster_stats.data.aggregate_hypervisor_memory_usage_ppm)
     overall_memory_usage_bytes = get_avg_value(cluster_stats.data.overall_memory_usage_bytes)
 
@@ -560,7 +566,7 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 "host_ext_id" : host_ext_id,
             }
 
-            # vm_stats_details_list.append(vm_stats_details) Use only for troubleshooting
+            # vm_stats_details_list.append(vm_stats_details) #troubleshoot
 
     all_vm_stats_details = {
         "total_vms_vcpu_allocated" : total_vms_vcpu_allocated,
@@ -579,6 +585,7 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
     }
 
     return all_vm_stats_details
+    # return all_vm_stats_details,vm_stats_details_list #troubleshoot
 
 
 def get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type="demand"):
@@ -594,7 +601,7 @@ def get_optimal_num_vms(cluster_stats_details,all_vm_stats_details,oc_ratio,type
     elif type == "allocation":
         resource_capacity = {
             "vCPU": cluster_stats_details.get("vcpu_capacity") * oc_ratio.get("vcpu_ratio") * cluster_threshold,
-            "memory_gb": cluster_stats_details.get("memory_capacity_gb") * oc_ratio.get("memory_ratio") * cluster_threshold,
+            "memory_gb": (cluster_stats_details.get("memory_capacity_gb") - cluster_stats_details.get("ha_reserved_memory_gb")) * oc_ratio.get("memory_ratio") * cluster_threshold,
             "disk_gb": cluster_stats_details.get("logical_storage_usage_gb") * oc_ratio.get("storage_ratio") * cluster_threshold
         }    
 
@@ -645,8 +652,10 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
     cluster_stats_details = get_cluster_stats(clusters_api,cluster)
     all_vm_stats_details = get_vm_stats(vmm_api,vmm_stats_api,cluster,category_api)
 
-    # host_stats_details_list,all_host_stats_details = get_host_stats(clusters_api,cluster) #tocomment
-    # get_report_interim([cluster_stats_details],host_stats_details_list,vm_stats_details_list) #troubleshooting
+    #troubleshoot
+    # all_vm_stats_details,vm_stats_details_list = get_vm_stats(vmm_api,vmm_stats_api,cluster,category_api) #troubleshoot
+    # host_stats_details_list,all_host_stats_details = get_host_stats(clusters_api,cluster) #troubleshoot
+    # get_report_interim([cluster_stats_details],host_stats_details_list,vm_stats_details_list) #troubleshoot
 
     remaining_vm_list = {"demand":{},"allocation":{} }
 

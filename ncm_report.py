@@ -635,13 +635,10 @@ def main():
     parser.add_argument("--pc_user", required=True, help="Prism Central Username")
     parser.add_argument("--pc_secret", required=True, help="Prism Central Password") 
     parser.add_argument('--output_path', required=True, help='Path of output file')
-    parser.add_argument('--output_files_name', required=True, help='File to copy the output filenames')
+    parser.add_argument('--output_files_name', required=False, help='File to copy the output filenames')
 
 #    parser.add_argument("--cluster_name", required=True, help="Cluster Name")
     args = parser.parse_args()
-    if not args.pc_ip or not args.pc_user or not args.pc_secret or not args.output_path or not args.output_files_name:
-        parser.error("All of --pc_ip, --pc_user, and --pc_secret must be provided.")
-
 #    password = getpass.getpass(prompt="Enter password: ")
 
     output_path = args.output_path
