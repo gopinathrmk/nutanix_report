@@ -170,7 +170,13 @@ def get_cluster_stats(clusters_api,cluster):
     num_vcpu_used = round((hypervisor_cpu_usage_ppm * num_vcpu)/1000000)
     num_vcpu_available = num_vcpu - num_vcpu_used
 
-    memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
+    if cluster_stats.data.memory_capacity_bytes :
+        # print(cluster_stats.data.memory_capacity_bytes)
+        memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value
+    else:
+        print("Unable to Fetch Memory Capacity. Adjust the sampling range and frequency !!!")    
+        exit(1)
+    # memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
     aggregate_hypervisor_memory_usage_ppm = get_avg_value(cluster_stats.data.aggregate_hypervisor_memory_usage_ppm)
     overall_memory_usage_bytes = get_avg_value(cluster_stats.data.overall_memory_usage_bytes)
 
@@ -205,19 +211,18 @@ def get_cluster_stats(clusters_api,cluster):
         "ha_reserved_memory_gb" : ha_reserved_memory_gb,
         "memory_available_gb" : memory_available_gb,
         "storage_capacity_gb" : storage_capacity_gb,
-        "logical_storage_usage_gb" : logical_storage_usage_gb,
+        # "logical_storage_usage_gb" : logical_storage_usage_gb,
         "storage_usage_gb" : storage_usage_gb,
         "free_physical_storage_gb" : free_physical_storage_gb,
-        "free_logical_storage_gb" : free_logical_storage_gb,
-        # "storage_gb_free" : storage_free_gb,
+        # "free_logical_storage_gb" : free_logical_storage_gb,
         "memory_capacity_bytes" : memory_capacity_bytes,
         "overall_memory_usage_bytes" : overall_memory_usage_bytes,
         "memory_available_bytes" : memory_available_bytes,
         "storage_capacity_bytes": storage_capacity_bytes,
-        "logical_storage_usage_bytes" : logical_storage_usage_bytes,
+        # "logical_storage_usage_bytes" : logical_storage_usage_bytes,
         "storage_used_bytes":  storage_usage_bytes,
         "free_physical_storage_bytes" : free_physical_storage_bytes,
-        "free_logical_storage_bytes" : free_logical_storage_bytes
+        # "free_logical_storage_bytes" : free_logical_storage_bytes
     }
 
     return cluster_stats_details
@@ -290,7 +295,7 @@ def get_host_stats(clusters_api,cluster):
         logical_storage_usage_gb =  round(logical_storage_usage_bytes / (GB_or_GiB ** 3),2)
         storage_usage_gb =  round(storage_usage_bytes / (GB_or_GiB ** 3),2)
         free_physical_storage_gb =  round(free_physical_storage_bytes / (GB_or_GiB ** 3),2)
-        free_logical_storage_gb = logical_storage_usage_gb - storage_usage_gb
+        # free_logical_storage_gb = logical_storage_usage_gb - storage_usage_gb
 
 
         nics_physical = clusters_api.list_host_nics_by_host_id(cluster.ext_id,host.ext_id)
@@ -313,10 +318,10 @@ def get_host_stats(clusters_api,cluster):
             "ha_reserved_memory_gb" : ha_reserved_memory_gb,
             # "disk_size_gb" : disk_size_gb,
             "storage_capacity_gb" : storage_capacity_gb,
-            "logical_storage_usage_gb" : logical_storage_usage_gb,
+            # "logical_storage_usage_gb" : logical_storage_usage_gb,
             "storage_usage_gb" : storage_usage_gb,
             "free_physical_storage_gb" : free_physical_storage_gb,
-            "free_logical_storage_gb" : free_logical_storage_gb,
+            # "free_logical_storage_gb" : free_logical_storage_gb,
             "nic_count" : len(nics_physical.data),
             "no_active_vm" :  host.hypervisor.number_of_vms,
             "pc_name" : pc_name #for datacenter
@@ -587,8 +592,8 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
             "Total Memory (GB)" : round(host_info.get("memory_capacity_gb")) ,
             "Memory Usage %" : round(host_info.get("overall_memory_usage_gb")/host_info.get("memory_capacity_gb") * 100) ,
             # "HA Reserved Memory (GB)" : round(host_info.get("ha_reserved_memory_gb")),
-            "Total Capacity (GB)" :round(host_info.get("logical_storage_usage_gb")) ,
-            "Free Space (GB)" : round(host_info.get("free_logical_storage_gb")) ,
+            "Total Capacity (GB)" :round(host_info.get("storage_capacity_gb")) ,
+            "Free Space (GB)" : round(host_info.get("free_physical_storage_gb")) ,
             #"Hypervisor Version " : "", #couldn't get 
             "Nic Count " : host_info.get("nic_count") ,
             "Active VMs" :  host_info.get("no_active_vm") ,
