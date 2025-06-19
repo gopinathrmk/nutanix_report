@@ -407,12 +407,15 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
             #VM IP Info
             vm_num_nic = len(vm.nics) if vm.nics else 0
             vm_ip_address_list = []
+            nic_connection_status = []
 
             if vm_num_nic:
                 for nic in vm.nics:
                     if nic.network_info and nic.network_info.ipv4_info:
                         for ip_address in nic.network_info.ipv4_info.learned_ip_addresses:
                             vm_ip_address_list.append(ip_address.value + str(ip_address.prefix_length))
+                    if nic.backing_info and nic.backing_info.is_connected:
+                        nic_connection_status.append({nic.backing_info.mac_address:nic.backing_info.is_connected })
 
 
             #Disk Capacity
@@ -557,6 +560,7 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 "cluster_name" : cluster.name,
                 "power_state" : vm.power_state,
                 "ip" : vm_ip_address_list,
+                "NIC connection Status" : nic_connection_status,
                 "num_vcpu_allocated" : vm_vcpu_allocated,
                 "num_vcpu_consumed" : vm_vcpu_consumed,
                 "num_vcpu_available" : vm_vcpu_allocated - vm_vcpu_consumed,

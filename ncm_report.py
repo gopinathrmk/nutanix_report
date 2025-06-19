@@ -245,6 +245,7 @@ def get_host_stats(clusters_api,cluster):
 
 #Start of host info 
         num_vcpu = host.number_of_cpu_threads 
+        num_cores = host.number_of_cpu_cores 
         memory_capacity_bytes = host.memory_size_bytes 
         disk_size_bytes = 0
         for disk in host.disk:
@@ -303,13 +304,16 @@ def get_host_stats(clusters_api,cluster):
 
         host_info = {
             "name" : host.host_name ,
+            "block_serial" : host.block_serial,
+            "hypervisor_full_name" : host.hypervisor.full_name,
             "ext_id" : host.ext_id,
             "cluster_name" :  cluster.name,
             "ip" : host.ipmi.ip.ipv4.value + "/"+ str(host.ipmi.ip.ipv4.prefix_length),
             "model" : host.block_model, #no Server band 
             "cpu_model" : host.cpu_model,
             "num_of_sockets" : host.number_of_cpu_sockets,
-            "num_vcpu" : num_vcpu,
+            "num_cores" : num_cores,
+            # "num_vcpu" : num_vcpu,
             "cpu_usage_percent" : round(hypervisor_cpu_usage_ppm/10000,2),
             "num_vcpu_available" : num_vcpu_available,
             "memory_capacity_gb" : memory_capacity_gb ,
@@ -399,12 +403,15 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
             #VM IP Info
             vm_num_nic = len(vm.nics) if vm.nics else 0
             vm_ip_address_list = []
+            nic_connection_status = []
 
             if vm_num_nic:
                 for nic in vm.nics:
                     if nic.network_info and nic.network_info.ipv4_info:
                         for ip_address in nic.network_info.ipv4_info.learned_ip_addresses:
                             vm_ip_address_list.append(ip_address.value + str(ip_address.prefix_length))
+                    if nic.backing_info and nic.backing_info.is_connected:
+                        nic_connection_status.append({nic.backing_info.mac_address:nic.backing_info.is_connected })
 
 
             #Disk Capacity
@@ -493,6 +500,12 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 hyper_mem_usage_ppm_value = get_avg_list(hyper_mem_usage_ppm_value_list)
 
 
+            vm_vcpu_consumed_percent = round(vcpu_usage_ppm_value / 100_00)
+            vm_mem_consumed_percent = round (mem_usage_ppm_value / 100_00)
+            vm_disk_consumed_percent = round(disk_usage_ppm_value  / 100_00)
+            vm_hyper_vcpu_consumed_percent = round(hyper_vcpu_usage_ppm_value/ 100_00)
+            vm_hyper_mem_consumed_percent = round (hyper_mem_usage_ppm_value / 100_00)
+
             vm_vcpu_consumed = round((vcpu_usage_ppm_value * vm_vcpu_allocated ) / 1000000)
             vm_mem_consumed_bytes = round ((mem_usage_ppm_value * vm_mem_allocated_bytes) / 1000000)
             vm_disk_consumed_bytes = round((disk_usage_ppm_value * vm_disk_capacity_bytes) / 1000000)
@@ -530,10 +543,14 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 "Name" :  vm.name,
                 "Power State" : vm.power_state,
                 "vCPU" : vm_vcpu_allocated,
+                "vCPU usage % " : vm_hyper_vcpu_consumed_percent,
                 "Memory (GB)" : vm_mem_allocated_gb,
+                "Memory usage %" : vm_mem_consumed_percent,
                 "Disk Space(GB)" : vm_disk_capacity_gb,
+                "Disk Usage %" : vm_disk_consumed_percent,
                 "vNIC" : vm_num_nic,
                 "IP Address" : vm_ip_address_list,
+                "NIC connection Status" : nic_connection_status,
                 "OS" : OS,
                 "NGT Installed" : is_installed ,
                 "Categories" : category_list,
@@ -583,11 +600,14 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
         host_inventory = {
             "Name" :host_info.get("name") ,
             "Cluster Name" : host_info.get("cluster_name") ,
-            "IP" : host_info.get("ip") ,
+            # "Block Serial No." : host_info.get("block_serial"), # node serial number not available. 
+            "Hypervisor Version": host_info.get("hypervisor_full_name"),
+            "IP" : host_info.get("ip"),
             "Model" : host_info.get("model") ,
             "CPU Model" : host_info.get("cpu_model") ,
             "Physical CPU's" : host_info.get("num_of_sockets") ,
-            "Total CPU Cores " : host_info.get("num_vcpu") ,
+            # "Total CPU Cores " : host_info.get("num_vcpu") ,
+            "Total CPU Cores " : host_info.get("num_cores"),
             "CPU Usage %" : round(host_info.get("cpu_usage_percent")) ,
             "Total Memory (GB)" : round(host_info.get("memory_capacity_gb")) ,
             "Memory Usage %" : round(host_info.get("overall_memory_usage_gb")/host_info.get("memory_capacity_gb") * 100) ,
