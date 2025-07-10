@@ -774,6 +774,12 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
     vm_remaining_demand = int(min(vm_per_resource_demand.values()))
     vm_remaining_allocation = int(min(vm_per_resource_allocation.values()))
 
+    vm_remaining_demand = vm_remaining_demand - round(num_host/2)  # to account for memory defrag
+    vm_remaining_allocation = vm_remaining_allocation - round(num_host/2) # to account for memory defrag
+
+    vm_remaining_demand = vm_remaining_demand if vm_remaining_demand > 0 else 0
+    vm_remaining_allocation = vm_remaining_allocation if vm_remaining_allocation > 0 else 0
+
     report_resources.append({
         "Cluster Name" : cluster.name ,
         "Total Hosts" : cluster_stats_details.get("num_host") ,
