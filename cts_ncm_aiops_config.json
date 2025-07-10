@@ -1,32 +1,26 @@
 {
     "VM_TShirt_Sizes": {
-      "Small": {
-        "vCPU": 2,
-        "Memory": 4,
-        "Disk": 50
-      },
-      "Medium": {
-        "vCPU": 6,
-        "Memory": 8,
-        "Disk": 100
-      },
-      "Large": {
-        "vCPU": 8,
+      "STD": {
+        "vCPU": 4,
         "Memory": 16,
-        "Disk": 200
+        "Disk": 100
       }
     },
     "Environment": {
       "Production": {
         "vcpu_ratio": 2,
         "memory_ratio": 1,
-        "storage_ratio": 2
+        "storage_ratio": 1
       },
       "Development": {
         "vcpu_ratio": 4,
-        "memory_ratio": 2,
-        "storage_ratio": 4
+        "memory_ratio": 1,
+        "storage_ratio": 1
       }
+    },
+    "Environment_map":{
+      "Trigonometry" : "Production",
+      "Vector" : "Development"
     }
   }
   

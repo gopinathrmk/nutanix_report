@@ -8,7 +8,7 @@
  Last Modified : [YYYY-MM-DD]
  Version       : [v1.0.0]
  Usage         : python ncm_report.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky" --output_files_name <filename>
- Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib paramiko
+ Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib 
                 pip install ntnx_vmm_py_client ntnx_clustermgmt_py_client ntnx_prism_py_client
 ===============================================================================
 """
@@ -31,9 +31,9 @@ from ntnx_prism_py_client.api import CategoriesApi
 
 import datetime
 import argparse
-import getpass
+# import getpass
 import csv
-from tabulate import tabulate
+# from tabulate import tabulate
 from pathlib import Path
 import pprint
 import urllib3  # type: ignore
@@ -312,6 +312,7 @@ def get_host_stats(clusters_api,cluster):
             "model" : host.block_model, #no Server band 
             "cpu_model" : host.cpu_model,
             "num_of_sockets" : host.number_of_cpu_sockets,
+            "cores_per_sockets" : round(host.number_of_cpu_cores / host.number_of_cpu_sockets),
             "num_cores" : num_cores,
             # "num_vcpu" : num_vcpu,
             "cpu_usage_percent" : round(hypervisor_cpu_usage_ppm/10000,2),
@@ -606,7 +607,7 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
             "Model" : host_info.get("model") ,
             "CPU Model" : host_info.get("cpu_model") ,
             "Physical CPU's" : host_info.get("num_of_sockets") ,
-            # "Total CPU Cores " : host_info.get("num_vcpu") ,
+            "Cores Per Sockets " : host_info.get("cores_per_sockets") ,
             "Total CPU Cores " : host_info.get("num_cores"),
             "CPU Usage %" : round(host_info.get("cpu_usage_percent")) ,
             "Total Memory (GB)" : round(host_info.get("memory_capacity_gb")) ,
