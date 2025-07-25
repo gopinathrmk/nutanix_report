@@ -22,7 +22,7 @@ def main():
     
     output_files_name = Path(output_path + "/" +args.output_files_name)
 
-    filetypes = ["vm_inventory","host_inventory","resources","remaining_vm"]
+    filetypes = ["vm_inventory","host_inventory","resources"]
     with open(output_files_name, 'r') as f:
             content = [line.strip() for line in f]
     
