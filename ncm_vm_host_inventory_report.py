@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ===============================================================================
- Script Name   : ncm_report.py
+ Script Name   : ncm_vm_host_inventory_report.py
  Description   : Generates VM and Host Inventory Reports
  Author        : Gopinath Sekar
  Created Date  : [2025-06-19]
@@ -9,7 +9,7 @@
  Version       : [v1.0.0]
  Usage         : python ncm_report.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky" --output_files_name <filename>
  Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib 
-                pip install ntnx_vmm_py_client ntnx_clustermgmt_py_client ntnx_prism_py_client
+                pip install ntnx_vmm_py_client==4.0.1 ntnx_clustermgmt_py_client==4.0.1 ntnx_prism_py_client==4.0.1
 ===============================================================================
 """
 
@@ -666,10 +666,16 @@ def main():
     parser.add_argument("--pc_secret", required=True, help="Prism Central Password") 
     parser.add_argument('--output_path', required=True, help='Path of output file')
     parser.add_argument('--output_files_name', required=False, help='File to copy the output filenames')
+    parser.add_argument('--clusters', required=True, help="Enter Cluster Names separated by comma")
+
 
 #    parser.add_argument("--cluster_name", required=True, help="Cluster Name")
     args = parser.parse_args()
 #    password = getpass.getpass(prompt="Enter password: ")
+    cluster_names = [c.strip() for c in args.clusters.split(",") if c.strip()]
+    if not cluster_names:
+        print("[ERROR] No cluster selected!")
+        exit(1)
 
     output_path = args.output_path
     # Initialize VMM API
@@ -686,11 +692,17 @@ def main():
     clusters = clusters_api.list_clusters()
 
     global pc_name
+    i=0
+    skip_index= []
     for cluster in clusters.data :
+        # print(cluster.name, cluster.config.cluster_function)
         if 'PRISM_CENTRAL' in cluster.config.cluster_function:
             pc_name = cluster.name
-            break
-
+        if (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
+            # print("Skipping Cluster: {} ".format(cluster.name))
+            skip_index.append(i)
+        i += 1
+   
     if output_path.endswith("/"):
         output_path = output_path[:-1]
 
@@ -704,10 +716,16 @@ def main():
         filenames = [str(filename_vm) , str(filename_host)]    
         write_filenames(filenames,filename=output_files_name)
 
-    print("Fetching Details for Prism Central: {} ".format(pc_name))
+    if len(clusters.data) > len(skip_index):
+        print("Fetching Details for Prism Central: {} ".format(pc_name))
+    else:
+        print("No clusters selected in {}. Exiting !!!".format(pc_name))
+        exit(0)
 
+    index=0 
     for cluster in clusters.data :
-        if 'AOS' in cluster.config.cluster_function:
+        #if 'AOS' in cluster.config.cluster_function and cluster.name in cluster_names:
+        if index not in skip_index:
             print("\tFetching Details for Cluster: {} ".format(cluster.name))
             host_inventory_list = get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,category_api)
             print("")
@@ -716,6 +734,7 @@ def main():
 
             #Writing the host inventory to file
             write_to_file(list_of_dict=host_inventory_list,filename=filename_host,mode='a',purpose="Host Inventory")
+        index += 1
                        
 
 if __name__ == "__main__":

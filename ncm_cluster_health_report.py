@@ -91,10 +91,10 @@ def ha_status(pc_ip, pc_user, pc_secret, cluster_extId):
 
 def extract_cluster_info(cluster_dict, args):
     # Safely extract required fields, skip if not present
-    data = cluster_dict.get("data", {})
-    config = data.get("config", {})
-    network = data.get("network", {})
-    nodes = data.get("nodes", {})
+    # data = cluster_dict.get("data", {})
+    config = cluster_dict.get("config", {})
+    network = cluster_dict.get("network", {})
+    nodes = cluster_dict.get("nodes", {})
 
     # Helper to safely extract IP or FQDN
     def get_ntp_value(ntp):
@@ -117,12 +117,12 @@ def extract_cluster_info(cluster_dict, args):
         return ""
 
     return {
-        "CLUSTER_NAME": data.get("name", ""),
+        "CLUSTER_NAME": cluster_dict.get("name", ""),
         "HOST_COUNT": nodes.get("number_of_nodes", ""),
         "AOS_VERSION": config.get("build_info", {}).get("version", ""),
         "DARE_STATUS": config.get("encryption_option") or "Not Enabled",
         # "HA_STATUS": config.get("operation_mode", ""),
-        "HA_STATUS": ha_status(args.pc_ip, args.pc_user, args.pc_secret, data.get("ext_id", "")),
+         "HA_STATUS": ha_status(args.pc_ip, args.pc_user, args.pc_secret, cluster_dict.get("ext_id", "")),
         "RF": config.get("redundancy_factor", ""),
         "NAME_SERVER": ", ".join([
             get_name_server_value(ns) for ns in network.get("name_server_ip_list", []) if ns
@@ -131,6 +131,34 @@ def extract_cluster_info(cluster_dict, args):
             get_ntp_value(ntp) for ntp in network.get("ntp_server_ip_list", []) if ntp
         ]),
     }
+
+def write_filenames(output_files,filename):
+    """
+    Writes the filename to the CSV file 
+    """
+    try:
+        with open(filename,'a') as file:
+            for output_file in output_files:
+                # print(output_file)
+                file.write(output_file+"\n")
+        #print("Filename details have been written to '{}'\n".format(filename)) 
+    except Exception as e :
+        print(f"!!! An unexpected error occured : {e}")
+        exit(1)
+
+def write_to_file(list_of_dict,filename,mode,purpose=""):
+    """
+    Writes the script output to the CSV file 
+    """
+    try:
+        with open(filename, mode=mode, newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=list(list_of_dict[0].keys()))
+            writer.writeheader()
+            writer.writerows(list_of_dict)
+        print("{} Report details have been written to '{}'\n".format(purpose,filename))  
+    except Exception as e :
+        print(f"!!! An unexpected error occured : {e}")
+        exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Nutanix cluster report.")
@@ -148,35 +176,55 @@ def main():
         exit(1)
 
     clusters_api = initialize_clustermgmt_api(args.pc_ip, args.pc_user, args.pc_secret)
-    cluster_ext_map = get_cluster_ext_map(clusters_api)
+    # cluster_ext_map = get_cluster_ext_map(clusters_api)
+    # cluster_rows = []
+
+    clusters = clusters_api.list_clusters()
+
+    global pc_name
+    i=0
+    skip_index= []
+    for cluster in clusters.data :
+        # print(cluster.name, cluster.config.cluster_function)
+        if 'PRISM_CENTRAL' in cluster.config.cluster_function:
+            pc_name = cluster.name
+        if (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
+            print("Skipping Cluster: {} ".format(cluster.name))
+            skip_index.append(i)
+        i += 1
+
+    output_path = args.output_path
+    if output_path.endswith("/"):
+        output_path = output_path[:-1]
+    filename_cluster_health = Path(output_path + "/PC_" + pc_name +  "_cluster_health_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+
+    output_files_name = ""
+    if args.output_files_name:
+        output_files_name = Path(output_path + "/" +args.output_files_name)  
+        filenames = [str(filename_cluster_health)]
+        write_filenames(filenames,filename=output_files_name) 
+
+    if len(clusters.data) > len(skip_index):
+        print("Fetching Details for Prism Central: {} ".format(pc_name))
+    else:
+        print("No clusters selected in {}. Exiting !!!".format(pc_name))
+        exit(0)
+    
+    index=0  
     cluster_rows = []
-
-    for cluster in cluster_names:
-        extId = cluster_ext_map.get(cluster)
-        if not extId:
-            print(f"[ERROR] Cluster '{cluster}' not found in Prism Central!")
-            continue
-        print(f"Processing cluster: {cluster} with extId: {extId}")
-        try:
-            cluster_obj = clusters_api.get_cluster_by_id(extId)
-            cluster_dict = cluster_obj.to_dict()
-            row = extract_cluster_info(cluster_dict, args=args)
-            cluster_rows.append(row)
-        except ClusterMgmtException as e:
-            print(f"[ERROR] Failed to process cluster '{cluster}': {e}")
-
-    # Write to CSV
-    if cluster_rows:
-        # Build filename like PC_PC_cluster_inventory_<timestamp>.csv (skip cluster names)
-        now = datetime.datetime.now()
-        timestamp = now.strftime("%Y-%m-%d-%H-%M")
-        filename = f"PC_PC_cluster_inventory_{timestamp}.csv"
-        output_file = Path(args.output_path) / (args.output_files_name or filename)
-        with open(output_file, "w", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=cluster_rows[0].keys())
-            writer.writeheader()
-            writer.writerows(cluster_rows)
-        print(f"Cluster report written to {output_file}")
+    for cluster in  clusters.data :
+        if index not in skip_index:
+            try:
+                # cluster_obj = clusters_api.get_cluster_by_id(extId)
+                print("\tFetching Details for Cluster: {} ".format(cluster.name))
+                cluster_dict = cluster.to_dict()
+                # print("cluster _dict: ", cluster_dict)
+                row = extract_cluster_info(cluster_dict, args=args)
+                cluster_rows.append(row)
+                write_to_file(list_of_dict=cluster_rows,filename=filename_cluster_health,mode='a',purpose="Cluster({}) Resources ".format(cluster.name))
+            except ClusterMgmtException as e:
+                print(f"[ERROR] Failed to process cluster '{cluster}': {e}")
+        index += 1
 
 
 if __name__ == "__main__":

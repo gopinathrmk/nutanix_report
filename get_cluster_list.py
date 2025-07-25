@@ -1,9 +1,9 @@
 
-import json #tocomment
-from time import sleep #tocomment
+#import json #tocomment
+#from time import sleep #tocomment
 
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+#import urllib3
+#urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import requests
 
@@ -204,30 +204,17 @@ def prism_get_clusters(api_server,username,passwd,secure=False,print_f=True,filt
                               entity_type="cluster",entity_api_root="clusters",secure=secure,print_f=print_f,filter=filter)
 
 
-def main():
-    
-    PC_list = [
-        {
-        "PCIP" : "10.136.136.8",
-        "username" : "gopinath.sekar",
-        "secret" : "Nutanix@123"}
-    ]
-    cluster_name_list = []
-    for PC in PC_list:
-        cluster_list = prism_get_clusters(api_server=PC["PCIP"],username=PC["username"],passwd=PC["secret"],print_f=False)
-        cluster_name_list.extend = [cluster['spec']['name'] for cluster in cluster_list]
-    
-    
-    print("List of clusters in Prism Central:")
-    for cluster_name in cluster_name_list:
-        print(cluster_name, end=",")
 
-    # for cluster in cluster_list:
-    #     if cluster['spec']['name'] == cluster_name:
-    #         cluster_uuid = cluster['metadata']['uuid']
-    #         cluster_details = cluster.copy()
 
-                       
+PCIP_list = '@@{PCIP}@@'.split(",")
+cluster_name_list = ["ALL"]
 
-if __name__ == "__main__":
-    main()
+for PCIP in PCIP_list:
+    cluster_list = prism_get_clusters(api_server=PCIP,username='@@{PC.username}@@',passwd='@@{PC.secret}@@',print_f=False)
+    for cluster in cluster_list:
+        if cluster['status']['resources']['config']['service_list'][0] == 'AOS':
+            cluster_name_list.append(cluster['spec']['name'])
+
+
+print(",".join(cluster_name_list))
+

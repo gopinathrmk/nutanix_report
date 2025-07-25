@@ -57,15 +57,15 @@ def initialize_subnets_api(api_server, username, password):
     return ntnx_networking_py_client.SubnetsApi(ntnx_networking_py_client.ApiClient(configuration=config))
 
 def get_cluster_ext_map(clusters_api):
-    clusters = clusters_api.list_clusters()
+    clusters = clusters_api.list_clusters(_limit=100)
     return {entity.ext_id: entity.name for entity in clusters.data}
 
 def get_subnet_ext_map(subnets_api):
-    subnets = subnets_api.list_subnets()
+    subnets = subnets_api.list_subnets(_limit=100)
     return {entity.ext_id: entity.name for entity in subnets.data}
 
 def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
-    """Extract VM network info from a VM JSON object, handling multiple IPs per NIC, and using cluster ext_id from the VM JSON itself. MAC/connection status is a list of dicts, one per NIC. Subnet names, MAC addresses, and IPs are collected for each NIC."""
+    """Extract VM network info from a VM JSON object, outputting one row per NIC/IP, not as lists."""
     rows = []
     vm_name = vm_json.get("name", "")
     cluster_ext_id = ""
@@ -74,17 +74,13 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
         cluster_ext_id = vm_json["cluster"].get("ext_id", "")
         cluster_name = cluster_ext_map.get(cluster_ext_id, "")
     nics = vm_json.get("nics", [])
-    nic_connection_status = []
-    subnet_names = []
-    mac_addresses = []
-    all_ip_addresses = []
     if not nics:
         rows.append({
             "VM_NAME": vm_name,
-            "IP_ADDRESS": [],
-            "NIC_CONNECTED_STATUS": [],
-            "SUBNET_NAME": [],
-            "MAC_ADDRESS": [],
+            "IP_ADDRESS": "",
+            "NIC_CONNECTED_STATUS": "",
+            "SUBNET_NAME": "",
+            "MAC_ADDRESS": "",
             "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
             "PC": pc_name
         })
@@ -93,39 +89,52 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
             try:
                 backing_info = nic.get("backing_info", {})
                 mac_address = backing_info.get("mac_address", "")
-                if mac_address:
-                    mac_addresses.append(mac_address)
-                nic_connected = bool(backing_info.get("is_connected", False))
-                if mac_address:
-                    nic_connection_status.append({mac_address: nic_connected})
+                nic_connected = "True" if backing_info.get("is_connected", False) else "False"
                 network_info = nic.get("network_info", {})
                 subnet = network_info.get("subnet", {})
                 subnet_extid = subnet.get("ext_id", "")
                 subnet_name = subnet_ext_map.get(subnet_extid, subnet_extid)
-                if subnet_name:
-                    subnet_names.append(subnet_name)
                 ipv4_info = network_info.get("ipv4_info", {})
                 learned_ips = ipv4_info.get("learned_ip_addresses", []) if ipv4_info else []
+                ip_written = False
                 for ip_obj in learned_ips:
                     ip_val = ip_obj.get("value", "")
                     if ip_val:
-                        all_ip_addresses.append(ip_val)
+                        rows.append({
+                            "VM_NAME": vm_name,
+                            "IP_ADDRESS": ip_val,
+                            "NIC_CONNECTED_STATUS": nic_connected,
+                            "SUBNET_NAME": subnet_name,
+                            "MAC_ADDRESS": mac_address,
+                            "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
+                            "PC": pc_name
+                        })
+                        ip_written = True
                 ipv4_config = network_info.get("ipv4_config", {})
                 ip_addr_obj = ipv4_config.get("ip_address", {}) if ipv4_config else {}
                 ip_val = ip_addr_obj.get("value", "")
-                if ip_val:
-                    all_ip_addresses.append(ip_val)
+                if ip_val and not ip_written:
+                    rows.append({
+                        "VM_NAME": vm_name,
+                        "IP_ADDRESS": ip_val,
+                        "NIC_CONNECTED_STATUS": nic_connected,
+                        "SUBNET_NAME": subnet_name,
+                        "MAC_ADDRESS": mac_address,
+                        "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
+                        "PC": pc_name
+                    })
+                elif not learned_ips and not ip_val:
+                    rows.append({
+                        "VM_NAME": vm_name,
+                        "IP_ADDRESS": "",
+                        "NIC_CONNECTED_STATUS": nic_connected,
+                        "SUBNET_NAME": subnet_name,
+                        "MAC_ADDRESS": mac_address,
+                        "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
+                        "PC": pc_name
+                    })
             except Exception as e:
                 print(f"[ERROR] Failed to process NIC for VM '{vm_name}': {e}")
-        rows.append({
-            "VM_NAME": vm_name,
-            "IP_ADDRESS": all_ip_addresses,
-            "NIC_CONNECTED_STATUS": nic_connection_status,
-            "SUBNET_NAME": subnet_names,
-            "MAC_ADDRESS": mac_addresses,
-            "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
-            "PC": pc_name
-        })
     return rows
 
 def write_vm_network_csv(rows, output_path=None, output_files_name=None):
@@ -164,14 +173,32 @@ def main():
     subnets_api = initialize_subnets_api(args.pc_ip, args.pc_user, args.pc_secret)
     subnet_ext_map = get_subnet_ext_map(subnets_api)
     vmm_api = initialize_vmm_api(args.pc_ip, args.pc_user, args.pc_secret)
+
     vms = vmm_api.list_vms(_limit=100)
-    vms_data = vms.to_dict().get("data", []) if hasattr(vms, "to_dict") else vms.get("data", [])
-    all_rows = []
-    for vm in vms_data:
-        if not isinstance(vm, dict) or not vm.get("name"):
-            continue
-        all_rows.extend(extract_vm_network_info(vm, pc_name, cluster_ext_map, subnet_ext_map))
-    write_vm_network_csv(all_rows, args.output_path, args.output_files_name)
+    total_vms_count = vms.metadata.total_available_results
+    #print(f"Total VMs in cluster: {total_vms_count}")
+    page_loop = (total_vms_count // 100) + 1
+    #print(f"Page Loop: {page_loop}")
+    
+    for page in range(page_loop):
+        vm_stats_details_list = []  
+        print("Page {}".format(page))
+        vms = vmm_api.list_vms(
+            _limit=100,
+            _page=page
+        )
+        if not vms.data:
+            break
+        # for vm in vms.data:
+        #     print(".",end='', flush=True)
+
+        vms_data = vms.to_dict().get("data", []) if hasattr(vms, "to_dict") else vms.get("data", [])
+        all_rows = []
+        for vm in vms_data:
+            if not isinstance(vm, dict) or not vm.get("name"):
+                continue
+            all_rows.extend(extract_vm_network_info(vm, pc_name, cluster_ext_map, subnet_ext_map))
+        write_vm_network_csv(all_rows, args.output_path, args.output_files_name)
 
 if __name__ == "__main__":
     main()
