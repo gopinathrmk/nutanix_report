@@ -35,7 +35,7 @@ from ntnx_clustermgmt_py_client.rest import ApiException as ClusterMgmtException
 from ntnx_clustermgmt_py_client.api import ClustersApi
 
 
-
+pc_name = ""  # Global variable to store Prism Central name``
 current_time = datetime.datetime.now(datetime.timezone.utc)  # Use timezone-aware UTC datetime
 end_time = (current_time ).strftime("%Y-%m-%dT%H:%M:%SZ")  
 start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ") 
@@ -83,7 +83,10 @@ def ha_status(pc_ip, pc_user, pc_secret, cluster_extId):
     response = requests.get(uri, headers=headers, auth=(pc_user, pc_secret), verify=False)
     if response.status_code == 200:
         ha_info = response.json()
-        return ha_info.get("haState", "")
+        if ha_info.get("haState", "") == "HighlyAvailable":
+            return "HighlyAvailable"
+        else:
+            return "Not Enabled"
     else:
         print(f"[ERROR] Failed to fetch HA status: {response.status_code} {response.text}")
         return ""
@@ -130,6 +133,7 @@ def extract_cluster_info(cluster_dict, args):
         "NTP_SERVER": ", ".join([
             get_ntp_value(ntp) for ntp in network.get("ntp_server_ip_list", []) if ntp
         ]),
+        "PC_NAME" : pc_name
     }
 
 def write_filenames(output_files,filename):
@@ -221,7 +225,7 @@ def main():
                 # print("cluster _dict: ", cluster_dict)
                 row = extract_cluster_info(cluster_dict, args=args)
                 cluster_rows.append(row)
-                write_to_file(list_of_dict=cluster_rows,filename=filename_cluster_health,mode='a',purpose="Cluster({}) Resources ".format(cluster.name))
+                write_to_file(list_of_dict=cluster_rows,filename=filename_cluster_health,mode='a',purpose="Cluster({}) Health ".format(cluster.name))
             except ClusterMgmtException as e:
                 print(f"[ERROR] Failed to process cluster '{cluster}': {e}")
         index += 1
