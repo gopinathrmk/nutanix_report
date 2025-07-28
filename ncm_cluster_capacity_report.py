@@ -176,8 +176,6 @@ def get_cluster_stats(clusters_api,cluster):
         # "aggregateHypervisorMemoryUsagePpm,overallMemoryUsageBytes,storageCapacityBytes," \
         # "storageUsageBytes,logicalStorageUsageBytes,freePhysicalStorageBytes"  # Request specific properties
     )
-    #print(f"Cluster stats: {cluster_stats}")
-    #input("Press Enter to continue...")
 
     # cpuCapacityHz = cluster_stats.data.cpu_capacity_hz[0].value if cluster_stats.data.cpu_capacity_hz else 0
     # cpuUsageHz = get_avg_value(cluster_stats.data.cpu_usage_hz)
@@ -185,24 +183,25 @@ def get_cluster_stats(clusters_api,cluster):
     num_vcpu_used = round((hypervisor_cpu_usage_ppm * num_vcpu)/1000000)
     num_vcpu_available = num_vcpu - num_vcpu_used
 
-    if cluster_stats.data.memory_capacity_bytes :
-        # print(cluster_stats.data.memory_capacity_bytes)
-        memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value
-    else:
-        print("Unable to Fetch Memory Capacity. Adjust the sampling range and frequency !!!")    
-        exit(1)
-    # memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
+    # Memory Capacity will not be taken from cluster as it takes from stats which is inconsistent
+    # Hence all memory related stats will be taken from host stats
+
+    # if cluster_stats.data.memory_capacity_bytes :
+    #     memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value
+    # else:
+    #     print("Unable to Fetch Memory Capacity. Adjust the sampling range and frequency !!!")    
+    #     exit(1)
     aggregate_hypervisor_memory_usage_ppm = get_avg_value(cluster_stats.data.aggregate_hypervisor_memory_usage_ppm)
     overall_memory_usage_bytes = get_avg_value(cluster_stats.data.overall_memory_usage_bytes)
 
-    hypervisor_memory_usage_bytes =  round((aggregate_hypervisor_memory_usage_ppm/1000_000 * memory_capacity_bytes),2)
-    memory_available_bytes = memory_capacity_bytes - overall_memory_usage_bytes
+    # hypervisor_memory_usage_bytes =  round((aggregate_hypervisor_memory_usage_ppm/1000_000 * memory_capacity_bytes),2)
+    # memory_available_bytes = memory_capacity_bytes - overall_memory_usage_bytes
 
-    memory_capacity_gb = round(memory_capacity_bytes / (GB_or_GiB ** 3))
-    overall_memory_usage_gb = round(overall_memory_usage_bytes / (GB_or_GiB ** 3))
-    hypervisor_memory_usage_gb = round(hypervisor_memory_usage_bytes / (GB_or_GiB ** 3))
-    ha_reserved_memory_gb = round((overall_memory_usage_gb - hypervisor_memory_usage_gb),2)
-    memory_available_gb  = round(memory_available_bytes / (GB_or_GiB ** 3))
+    # memory_capacity_gb = round(memory_capacity_bytes / (GB_or_GiB ** 3))
+    # overall_memory_usage_gb = round(overall_memory_usage_bytes / (GB_or_GiB ** 3))
+    # hypervisor_memory_usage_gb = round(hypervisor_memory_usage_bytes / (GB_or_GiB ** 3))
+    # ha_reserved_memory_gb = round((overall_memory_usage_gb - hypervisor_memory_usage_gb),2)
+    # memory_available_gb  = round(memory_available_bytes / (GB_or_GiB ** 3))
 
     storage_capacity_bytes = cluster_stats.data.storage_capacity_bytes[0].value
     logical_storage_usage_bytes = get_avg_value(cluster_stats.data.logical_storage_usage_bytes)
@@ -220,19 +219,19 @@ def get_cluster_stats(clusters_api,cluster):
         "vcpu_capacity" : num_vcpu,
         "vcpu_used" : num_vcpu_used,
         "vcpu_available" : num_vcpu_available,
-        "memory_capacity_gb" : memory_capacity_gb,
-        "overall_memory_usage_gb" : overall_memory_usage_gb,
-        "hypervisor_memory_usage_gb": hypervisor_memory_usage_gb,
-        "ha_reserved_memory_gb" : ha_reserved_memory_gb,
-        "memory_available_gb" : memory_available_gb,
+        # "memory_capacity_gb" : memory_capacity_gb,
+        # "overall_memory_usage_gb" : overall_memory_usage_gb,
+        # "hypervisor_memory_usage_gb": hypervisor_memory_usage_gb,
+        # "ha_reserved_memory_gb" : ha_reserved_memory_gb,
+        # "memory_available_gb" : memory_available_gb,
         "storage_capacity_gb" : storage_capacity_gb,
         "logical_storage_usage_gb" : logical_storage_usage_gb,
         "storage_usage_gb" : storage_usage_gb,
         "free_physical_storage_gb" : free_physical_storage_gb,
         # "free_logical_storage_gb" : free_logical_storage_gb,
-        "memory_capacity_bytes" : memory_capacity_bytes,
+        # "memory_capacity_bytes" : memory_capacity_bytes,
         "overall_memory_usage_bytes" : overall_memory_usage_bytes,
-        "memory_available_bytes" : memory_available_bytes,
+        # "memory_available_bytes" : memory_available_bytes,
         "storage_capacity_bytes": storage_capacity_bytes,
         # "logical_storage_usage_bytes" : logical_storage_usage_bytes,
         "storage_used_bytes":  storage_usage_bytes,
@@ -687,6 +686,7 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
         cluster_usable_storage_gb += host.get("storage_capacity_gb")
 
     cluster_usable_storage_gb = cluster_usable_storage_gb * storage_threshold 
+    cluster_usable_storage_gb = round(cluster_usable_storage_gb/2) # Considering RF2.
     
 #Preparing  resource Report
     report_resources =  []
@@ -754,25 +754,25 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
 
         "vCPUs Remaining (Allocation)" : vcpu_remaining_allocation ,
         "vCPUs Remaining (Demand)" : vcpu_remaining_demand,
-        "Memory Remaining (Allocation)" : memory_remaining_allocation,
-        "Memory Remaining (Demand)" : memory_remaining_demand,
-        "Storage Remaining (Allocation)" : storage_remaining_allocation ,
-        "Storage Remaining (Demand)" :  round(storage_remaining_demand), 
+        "Memory Remaining GB (Allocation)" : memory_remaining_allocation,
+        "Memory Remaining GB (Demand)" : memory_remaining_demand,
+        "Storage Remaining GB (Allocation)" : storage_remaining_allocation ,
+        "Storage Remaining GB (Demand)" :  round(storage_remaining_demand), 
 
         "Usable vCPUs (Allocation)" : round (cluster_usable_vcpu) ,
-        "Usable Memory (Allocation)" : round(cluster_usable_memory_gb) ,
-        "Total Storage (Allocation)" : round(cluster_usable_storage_gb) ,
+        "Usable Memory GB (Allocation)" : round(cluster_usable_memory_gb) ,
+        "Usable Storage GB (Allocation)" : round(cluster_usable_storage_gb),
         "vCPUs Allocated (Allocation)" : all_vm_stats_details.get("total_vms_vcpu_allocated"),
-        "Memory Allocated (Allocation)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
-        "Storage Allocated (Allocation)" : all_vm_stats_details.get("total_vms_storage_gb_allocated"), #because this doesn't include images and other storage
+        "Memory Allocated GB (Allocation)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
+        "Storage Allocated GB (Allocation)" : all_vm_stats_details.get("total_vms_storage_gb_allocated"), #because this doesn't include images and other storage
         
         "Usable vCPUs (Demand)" : round (cluster_usable_vcpu) ,
-        "Usable Memory (Demand)" : round(cluster_usable_memory_gb) ,
-        "Total Storage (Demand)" :  round(cluster_usable_storage_gb) ,
+        "Usable Memory GB (Demand)" : round(cluster_usable_memory_gb) ,
+        "Usable Storage GB (Demand)" :  round(cluster_usable_storage_gb),
         "vCPUs Used (Demand)" :  cluster_stats_details.get("vcpu_used") ,
         # "Memory Used (Demand)" :  round(all_vm_stats_details.get("total_vms_memory_consumed_gb")), # No Memory Overcommit
-        "Memory Used (Demand)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
-        "Storage Used (Demand)" : cluster_stats_details.get("storage_usage_gb") ,
+        "Memory Used GB (Demand)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
+        "Storage Used GB (Demand)" : cluster_stats_details.get("storage_usage_gb") ,
 
         "VM count-Capacity (Allocation)" : vm_remaining_allocation + cluster_stats_details.get("num_vms") ,
         "VM count-Capacity (Demand)" : vm_remaining_demand + cluster_stats_details.get("num_vms") 
