@@ -11,7 +11,6 @@
  Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib 
                 pip install ntnx_vmm_py_client ntnx_clustermgmt_py_client ntnx_prism_py_client
 
-python ncm_report_host_network_amt.py  --pc_ip 10.136.136.8 --pc_user gopinath.sekar --pc_secret "Nutanix@123" --output_path /Users/amit.yadav/Downloads/projects/nutanix_report 
 ===============================================================================
 """
 
@@ -203,7 +202,7 @@ def fetch_switch_details(cluster_ext_id, pc_ip, pc_user, pc_secret):
     return "", ""
 
 def write_virtual_switches_csv(virtual_switches, pc_name, cluster_ext_map, cluster_hosts, host_details_map, switch_details_map, output_path):
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     csv_file = Path(output_path) / f"PC_{pc_name}_host_network_report_{timestamp}.csv"
     with open(csv_file, "w", newline="") as f:
         writer = csv.writer(f)
@@ -231,6 +230,108 @@ def write_virtual_switches_csv(virtual_switches, pc_name, cluster_ext_map, clust
                     else:
                         for iface in host_nics:
                             writer.writerow([pc_name, cluster_name, host_name, host_ip, host_serial, vs_name, iface, bond_mode, switch_name, switch_ip])
+    print(f"Output file created: {csv_file}")
+
+def get_virtual_switches_data(virtual_switches, pc_name, cluster_ext_map, cluster_hosts, host_details_map, switch_details_map):
+    """
+    Gather virtual switch data as a list of dicts for CSV writing.
+    """
+    rows = []
+    for vs in virtual_switches.get("data", []):
+        vs_name = vs.get("name", "")
+        if vs_name == "no_uplink":
+            continue
+        bond_mode = vs.get("bond_mode", "")
+        for cluster in vs.get("clusters", []):
+            cluster_ext_id = cluster.get("ext_id", "")
+            cluster_name = next((name for name, ext in cluster_ext_map.items() if ext == cluster_ext_id), cluster_ext_id)
+            hosts_map = cluster_hosts.get(cluster_ext_id, {})
+            host_details = host_details_map.get(cluster_ext_id, {})
+            switch_name, switch_ip = switch_details_map.get(cluster_ext_id, ("", ""))
+            for host in cluster.get("hosts", []):
+                host_ext_id = host.get("ext_id", "")
+                details = host_details.get(host_ext_id, {})
+                host_name = details.get("name", hosts_map.get(host_ext_id, "Unknown"))
+                host_ip = details.get("ip", "")
+                host_serial = details.get("serial", "")
+                host_nics = host.get("host_nics", [])
+                if not host_nics:
+                    rows.append({
+                        "pc_name": pc_name,
+                        "cluster_name": cluster_name,
+                        "host_name": host_name,
+                        "host_ip": host_ip,
+                        "host_serial_no": host_serial,
+                        "virtual_switch": vs_name,
+                        "host_interfaces": "",
+                        "bond_mode": bond_mode,
+                        "switch_name": switch_name,
+                        "switch_ip": switch_ip
+                    })
+                else:
+                    for iface in host_nics:
+                        rows.append({
+                            "pc_name": pc_name,
+                            "cluster_name": cluster_name,
+                            "host_name": host_name,
+                            "host_ip": host_ip,
+                            "host_serial_no": host_serial,
+                            "virtual_switch": vs_name,
+                            "host_interfaces": iface,
+                            "bond_mode": bond_mode,
+                            "switch_name": switch_name,
+                            "switch_ip": switch_ip
+                        })
+    return rows
+
+def write_host_network_csv(data, columns, output_path):
+    """
+    Write list of dicts to CSV with given columns and output path.
+    """
+    import datetime
+    import csv
+    from pathlib import Path
+    # If output_path is a directory, create a filename inside it with the required naming convention
+    output_dir = Path(output_path)
+    if output_dir.is_dir():
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        csv_file = output_dir / f"PC_{pc_name}_host_network_report_{timestamp}.csv"
+    else:
+        csv_file = output_dir
+    with open(csv_file, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
+    print(f"Output file created: {csv_file}")
+
+def write_filenames(output_files,filename):
+    """
+    Writes the filename to the CSV file 
+    """
+    try:
+        with open(filename,'a') as file:
+            for output_file in output_files:
+                # print(output_file)
+                file.write(output_file+"\n")
+        #print("Filename details have been written to '{}'\n".format(filename)) 
+    except Exception as e :
+        print(f"!!! An unexpected error occured : {e}")
+        exit(1)
+
+def write_to_file(list_of_dict,filename,mode,purpose=""):
+    """
+    Writes the script output to the CSV file 
+    """
+    try:
+        with open(filename, mode=mode, newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=list(list_of_dict[0].keys()))
+            writer.writeheader()
+            writer.writerows(list_of_dict)
+        print("{} Report details have been written to '{}'\n".format(purpose,filename))  
+    except Exception as e :
+        print(f"!!! An unexpected error occured : {e}")
+        exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Nutanix VM network report.")
@@ -249,29 +350,15 @@ def main():
 
     clusters_api = initialize_clustermgmt_api(args.pc_ip, args.pc_user, args.pc_secret)
     cluster_ext_map = get_cluster_ext_map(clusters_api,cluster_names)
-    # pc_name = get_pc_name(clusters_api)
     global pc_name
+    pc_name = get_pc_name(clusters_api)
+
+    output_path = args.output_path
+    if output_path.endswith("/"):
+        output_path = output_path[:-1]
+    filename_host_network = Path(output_path + "/PC_" + pc_name +  "_host_network_" + current_time.strftime("%Y-%m-%d-%H-%M-%S") + ".csv")
 
     cluster_hosts = get_hosts_by_clusters(clusters_api, cluster_ext_map)
-    for cluster_ext_id, hosts in cluster_hosts.items():
-        print(f"Cluster ExtId: {cluster_ext_id}")
-        for host_ext_id, host_name in hosts.items():
-            print(f"  Host ExtId: {host_ext_id}, Host Name: {host_name}")
-
-            # host_nics = get_host_nic_by_host_id(clusters_api, cluster_ext_id, host_ext_id)
-            # print(host_nics)
-            # print("*"*100)
-            # # exit()
-            # print(f"  Host NICs for {host_name}: {host_nics}")
-
-            # host_vnics = get_virtual_nic_by_host_id(clusters_api, cluster_ext_id, host_ext_id)
-            # print(f" host_vnics: {json.dumps(host_vnics)}")
-            # print("*"*100)
-            # exit()
-
-            # vnics = get_virtual_nic_by_id(clusters_api, cluster_ext_id, host_ext_id)
-            # print(f"Virtual NICs for Host {host_name}: {json.dumps(vnics)}")
-            # print("*" * 100)
 
     # get virtual switches
     networking_apis = initialize_networking_api(args.pc_ip, args.pc_user, args.pc_secret)
@@ -281,15 +368,29 @@ def main():
     # Fetch host details for each cluster
     host_details_map = {}
     switch_details_map = {}
+
+    if (len(cluster_ext_map) == 0):
+        print("No clusters selected in {}. Exiting !!! \n".format(pc_name))
+        exit(0)
+
     for cluster_name, cluster_ext_id in cluster_ext_map.items():
         host_details_map[cluster_ext_id] = fetch_host_details(cluster_ext_id, args.pc_ip, args.pc_user, args.pc_secret)
         switch_details_map[cluster_ext_id] = fetch_switch_details(cluster_ext_id, args.pc_ip, args.pc_user, args.pc_secret)
-    write_virtual_switches_csv(virtual_switches, pc_name, cluster_ext_map, cluster_hosts, host_details_map, switch_details_map, args.output_path)
+    # write_virtual_switches_csv(virtual_switches, pc_name, cluster_ext_map, cluster_hosts, host_details_map, switch_details_map, args.output_path)
+    data = get_virtual_switches_data(virtual_switches, pc_name, cluster_ext_map, cluster_hosts, host_details_map, switch_details_map)
+    columns = ["pc_name", "cluster_name", "host_name", "host_ip", "host_serial_no", "virtual_switch", "host_interfaces", "bond_mode", "switch_name", "switch_ip"]
+    # write_host_network_csv(data, columns, args.output_path)
+    write_to_file(list_of_dict=data,filename=filename_host_network,mode='a',purpose="Host Network")
 
+    output_files_name = ""
+    if args.output_files_name:
+        output_files_name = Path(output_path + "/" +args.output_files_name)  
+        filenames = [str(filename_host_network)]
+        write_filenames(filenames,filename=output_files_name) 
 
-
-
+    print("------------Nutanix Host Network Report Generation Completed ------------\n\n")                  
 
 
 if __name__ == "__main__":
+    print("Preparing Nutanix Host Network Report ....")
     main()

@@ -410,7 +410,7 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 for nic in vm.nics:
                     if nic.network_info and nic.network_info.ipv4_info:
                         for ip_address in nic.network_info.ipv4_info.learned_ip_addresses:
-                            vm_ip_address_list.append(ip_address.value + str(ip_address.prefix_length))
+                            vm_ip_address_list.append(ip_address.value +"/"+ str(ip_address.prefix_length))
                     if nic.backing_info and nic.backing_info.is_connected:
                         nic_connection_status.append({nic.backing_info.mac_address:nic.backing_info.is_connected })
 
@@ -430,6 +430,7 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
             #NGT Info
             OS = vm.guest_tools.guest_os_version if vm.guest_tools else "NA"
             is_installed = vm.guest_tools.is_installed if vm.guest_tools else "No"
+            ngt_version = vm.guest_tools.version if vm.guest_tools else "NA"
 
             #Categories
             category_list = []
@@ -542,6 +543,10 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
             global pc_name
             vm_stats_details = {
                 "Name" :  vm.name,
+                "Description" : vm.description,
+                "Creation Time" : vm.create_time,
+                "Last Update Time" : vm.update_time,
+                "UUID" : vm.ext_id,
                 "Power State" : vm.power_state,
                 "vCPU" : vm_vcpu_allocated,
                 "vCPU usage % " : vm_hyper_vcpu_consumed_percent,
@@ -550,10 +555,13 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
                 "Disk Space(GB)" : vm_disk_capacity_gb,
                 "Disk Usage %" : vm_disk_consumed_percent,
                 "vNIC" : vm_num_nic,
-                "IP Address" : vm_ip_address_list,
-                "NIC connection Status" : nic_connection_status,
+                "IP Address" : ",".join(vm_ip_address_list),
+                #"NIC connection Status" : nic_connection_status, #included in vm network report
                 "OS" : OS,
                 "NGT Installed" : is_installed ,
+                "NGT Version" : ngt_version,
+                "Memory Overcommit" : vm.is_memory_overcommit_enabled,
+                "Protection Status" : vm.protection_type,
                 "Categories" : category_list,
                 "Parent Cluster" : cluster.name,
                 "PC " : pc_name,
@@ -698,7 +706,8 @@ def main():
         # print(cluster.name, cluster.config.cluster_function)
         if 'PRISM_CENTRAL' in cluster.config.cluster_function:
             pc_name = cluster.name
-        if (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
+            skip_index.append(i)
+        elif (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
             # print("Skipping Cluster: {} ".format(cluster.name))
             skip_index.append(i)
         i += 1
@@ -707,20 +716,20 @@ def main():
         output_path = output_path[:-1]
 
     global filename_vm
-    filename_vm = Path(output_path + "/PC_" +  pc_name + "_vm_inventory_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
-    filename_host = Path(output_path + "/PC_" +  pc_name + "_host_inventory_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+    filename_vm = Path(output_path + "/PC_" +  pc_name + "_vm_inventory_" + current_time.strftime("%Y-%m-%d-%H-%M-%S") + ".csv")
+    filename_host = Path(output_path + "/PC_" +  pc_name + "_host_inventory_" + current_time.strftime("%Y-%m-%d-%H-%M-%S") + ".csv")
+
+    if len(clusters.data) > len(skip_index):
+        print("Fetching Details for Prism Central: {} ".format(pc_name))
+    else:
+        print("No clusters selected in {}. Exiting !!! \n".format(pc_name))
+        exit(0)
 
     output_files_name = ""
     if args.output_files_name:
         output_files_name = Path(output_path + "/" +args.output_files_name)
         filenames = [str(filename_vm) , str(filename_host)]    
         write_filenames(filenames,filename=output_files_name)
-
-    if len(clusters.data) > len(skip_index):
-        print("Fetching Details for Prism Central: {} ".format(pc_name))
-    else:
-        print("No clusters selected in {}. Exiting !!!".format(pc_name))
-        exit(0)
 
     index=0 
     for cluster in clusters.data :
@@ -735,7 +744,9 @@ def main():
             #Writing the host inventory to file
             write_to_file(list_of_dict=host_inventory_list,filename=filename_host,mode='a',purpose="Host Inventory")
         index += 1
+    print("------------Nutanix VM and Host Inventory Report Generation Completed ------------\n\n")
                        
 
 if __name__ == "__main__":
+    print("Preparing Nutanix VM and Host Inventory Report")
     main()

@@ -22,7 +22,7 @@ def main():
     
     output_files_name = Path(output_path + "/" +args.output_files_name)
 
-    filetypes = ["vm_inventory","host_inventory","resources"]
+    filetypes = ["vm_inventory","host_inventory","resources","vm_disk","cluster_health","vm_network","host_network"]
     with open(output_files_name, 'r') as f:
             content = [line.strip() for line in f]
     
@@ -41,7 +41,7 @@ def main():
 
     for filetype,file_list in filenames.items():
         if file_list:
-            output_fname = Path(output_path + "/ALL_PC_" + filetype  + "_"+ current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+            output_fname = Path(output_path + "/ALL_PC_" + filetype  + "_"+ current_time.strftime("%Y-%m-%d-%H-%M-%S") + ".csv")
             with open(output_fname, 'w') as outfile:
                 firstfile = True 
                 for fname in file_list:

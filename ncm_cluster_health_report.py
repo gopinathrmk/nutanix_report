@@ -11,7 +11,6 @@
  Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib 
                 pip install ntnx_vmm_py_client ntnx_clustermgmt_py_client ntnx_prism_py_client
 
-python ncm_report_cluster_amt.py  --pc_ip 10.136.136.5 --pc_user gopinath.sekar --pc_secret "Nutanix@123" --output_path /Users/amit.yadav/Downloads/projects/nutanix_report --clusters Trigonometry,Vector,Trigonometry
 ===============================================================================
 """
 
@@ -192,7 +191,8 @@ def main():
         # print(cluster.name, cluster.config.cluster_function)
         if 'PRISM_CENTRAL' in cluster.config.cluster_function:
             pc_name = cluster.name
-        if (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
+            skip_index.append(i)
+        elif (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
             print("Skipping Cluster: {} ".format(cluster.name))
             skip_index.append(i)
         i += 1
@@ -200,20 +200,22 @@ def main():
     output_path = args.output_path
     if output_path.endswith("/"):
         output_path = output_path[:-1]
-    filename_cluster_health = Path(output_path + "/PC_" + pc_name +  "_cluster_health_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+    filename_cluster_health = Path(output_path + "/PC_" + pc_name +  "_cluster_health_" + current_time.strftime("%Y-%m-%d-%H-%M-%S") + ".csv")
 
+
+    if len(clusters.data) > len(skip_index):
+        print("Fetching Details for Prism Central: {} ".format(pc_name))
+    else:
+        print("No clusters selected in {}. Exiting !!! \n".format(pc_name))
+        exit(0)
+        
     output_files_name = ""
     if args.output_files_name:
         output_files_name = Path(output_path + "/" +args.output_files_name)  
         filenames = [str(filename_cluster_health)]
         write_filenames(filenames,filename=output_files_name) 
 
-    if len(clusters.data) > len(skip_index):
-        print("Fetching Details for Prism Central: {} ".format(pc_name))
-    else:
-        print("No clusters selected in {}. Exiting !!!".format(pc_name))
-        exit(0)
-    
+
     index=0  
     cluster_rows = []
     for cluster in  clusters.data :
@@ -229,7 +231,9 @@ def main():
             except ClusterMgmtException as e:
                 print(f"[ERROR] Failed to process cluster '{cluster}': {e}")
         index += 1
+    print("------------ Nutanix Cluster Health Report Generation Completed ------------\n\n")                  
 
 
 if __name__ == "__main__":
+    print("Preparing Nutanix Cluster Health Report ....")
     main()

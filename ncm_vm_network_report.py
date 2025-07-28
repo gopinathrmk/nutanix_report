@@ -81,10 +81,10 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
     if not nics:
         rows.append({
             "VM_NAME": vm_name,
+            "MAC_ADDRESS": "",
             "IP_ADDRESS": "",
             "NIC_CONNECTED_STATUS": "",
             "SUBNET_NAME": "",
-            "MAC_ADDRESS": "",
             "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
             "PC": pc_name
         })
@@ -106,10 +106,10 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
                     if ip_val:
                         rows.append({
                             "VM_NAME": vm_name,
+                            "MAC_ADDRESS": mac_address,
                             "IP_ADDRESS": ip_val,
                             "NIC_CONNECTED_STATUS": nic_connected,
                             "SUBNET_NAME": subnet_name,
-                            "MAC_ADDRESS": mac_address,
                             "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
                             "PC": pc_name
                         })
@@ -120,20 +120,20 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
                 if ip_val and not ip_written:
                     rows.append({
                         "VM_NAME": vm_name,
+                        "MAC_ADDRESS": mac_address,
                         "IP_ADDRESS": ip_val,
                         "NIC_CONNECTED_STATUS": nic_connected,
                         "SUBNET_NAME": subnet_name,
-                        "MAC_ADDRESS": mac_address,
                         "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
                         "PC": pc_name
                     })
                 elif not learned_ips and not ip_val:
                     rows.append({
                         "VM_NAME": vm_name,
+                        "MAC_ADDRESS": mac_address,
                         "IP_ADDRESS": "",
                         "NIC_CONNECTED_STATUS": nic_connected,
                         "SUBNET_NAME": subnet_name,
-                        "MAC_ADDRESS": mac_address,
                         "CLUSTER": cluster_name if cluster_name else cluster_ext_id,
                         "PC": pc_name
                     })
@@ -146,7 +146,7 @@ def write_vm_network_csv(rows, output_path=None, output_files_name=None):
         print("No VM network data found.")
         return
     now = datetime.datetime.now()
-    timestamp = now.strftime("%Y-%m-%d-%H-%M")
+    timestamp = now.strftime("%Y-%m-%d-%H-%M-%S")
     filename = f"PC_PC_vm_network_inventory_{timestamp}.csv"
     output_file = Path(output_path or ".") / (output_files_name or filename)
     with open(output_file, "w", newline="") as csvfile:
@@ -221,7 +221,8 @@ def main():
         # print(cluster.name, cluster.config.cluster_function)
         if 'PRISM_CENTRAL' in cluster.config.cluster_function:
             pc_name = cluster.name
-        if (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
+            skip_index.append(i)
+        elif (cluster.name not in cluster_names) and (cluster_names[0] != "ALL"):
             # print("Skipping Cluster: {} ".format(cluster.name))
             skip_index.append(i)
         i += 1
@@ -229,20 +230,19 @@ def main():
     if output_path.endswith("/"):
         output_path = output_path[:-1]
 
-    filename_vm_network = Path(output_path + "/PC_" +  pc_name + "_vm_network_" + current_time.strftime("%Y-%m-%d-%H-%M") + ".csv")
+    filename_vm_network = Path(output_path + "/PC_" +  pc_name + "_vm_network_" + current_time.strftime("%Y-%m-%d-%H-%M-%S") + ".csv")
+
+    if len(clusters.data) > len(skip_index):
+        print("Fetching Details for Prism Central: {} ".format(pc_name))
+    else:
+        print("No clusters selected in {}. Exiting !!! \n".format(pc_name))
+        exit(0)
 
     output_files_name = ""
     if args.output_files_name:
         output_files_name = Path(output_path + "/" +args.output_files_name)
         filenames = [str(filename_vm_network)]    
         write_filenames(filenames,filename=output_files_name)
-
-    if len(clusters.data) > len(skip_index):
-        print("Fetching Details for Prism Central: {} ".format(pc_name))
-    else:
-        print("No clusters selected in {}. Exiting !!!".format(pc_name))
-        exit(0)
-
 
     index=0  
     for cluster in  clusters.data :
@@ -283,6 +283,8 @@ def main():
                     purpose="\t\tVM Network Report : Page {}".format(page + 1)
                 )
         index += 1
+    print("------------Nutanix VM Network Report Generation Completed ------------\n\n")
 
 if __name__ == "__main__":
+    print("Preparing Nutanix VM Network Report ....")
     main()
