@@ -50,7 +50,7 @@ start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%
 # end_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")  
 # start_time = (current_time - datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
-GB_or_GiB = 1000
+GB_or_GiB = 1024  # 1024 for GiB, 1000 for GB
 cluster_threshold = 0.7
 pc_name = ""
 filename_vm = ""
@@ -121,112 +121,6 @@ def get_avg_value(data):
 
 def get_avg_list(list):
     return round(sum(list)/len(list)) if list else 0
-
-
-def get_cluster_stats(clusters_api,cluster):
-
-    cluster_stats_details = {}
-
-    #Fetching the number of cores in the cluster
-    hosts = clusters_api.list_hosts_by_cluster_id(cluster.ext_id)
-    cluster_hosts = [h for h in hosts.data if h.cluster.name == cluster.name]
-    #print(f"Cluster hosts: {cluster_hosts}")
-    cpu_details = []
-    num_vcpu = 0
-    cpu_capacity_hz = 0
-    for host in cluster_hosts:
-        host_id = host.ext_id
-        host_info = clusters_api.get_host_by_id(cluster.ext_id, host_id)
-        #print(f"Host ID: {host_id}")
-        #print(f"Host Info: {host_info}")
-        num_vcpu += host_info.data.number_of_cpu_threads
-        #cpu_capacity_hz += host_info.data.cpu_capacity_hz
-        cpu_details.append({
-            "host_id": host_id,
-            "numCpuThreads": host_info.data.number_of_cpu_threads,
-            #"cpuCapacityHz": host_info.data.cpu_capacity_hz
-        })
-    #cpu_capacity_ghz = round(cpu_capacity_hz / 1_000_000_000, 2)
-    #print(f"Total CPU Capacity: {cpu_capacity_ghz} GHz")
-
-    #Fetching Cluster Stats
-    cluster_stats = clusters_api.get_cluster_stats(
-        cluster.ext_id,
-        _startTime=start_time,
-        _endTime=end_time,
-        _samplingInterval=sampling_interval,
-        _statType=stat_type,
-        _select = "*"
-        # _select="cpuCapacityHz,cpuUsageHz,hypervisorCpuUsagePpm,memoryCapacityBytes," \
-        # "aggregateHypervisorMemoryUsagePpm,overallMemoryUsageBytes,storageCapacityBytes," \
-        # "storageUsageBytes,logicalStorageUsageBytes,freePhysicalStorageBytes"  # Request specific properties
-    )
-    #print(f"Cluster stats: {cluster_stats}")
-    #input("Press Enter to continue...")
-
-    # cpuCapacityHz = cluster_stats.data.cpu_capacity_hz[0].value if cluster_stats.data.cpu_capacity_hz else 0
-    # cpuUsageHz = get_avg_value(cluster_stats.data.cpu_usage_hz)
-    hypervisor_cpu_usage_ppm = get_avg_value(cluster_stats.data.hypervisor_cpu_usage_ppm)
-    num_vcpu_used = round((hypervisor_cpu_usage_ppm * num_vcpu)/1000000)
-    num_vcpu_available = num_vcpu - num_vcpu_used
-
-    if cluster_stats.data.memory_capacity_bytes :
-        # print(cluster_stats.data.memory_capacity_bytes)
-        memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value
-    else:
-        print("Unable to Fetch Memory Capacity. Adjust the sampling range and frequency !!!")    
-        exit(1)
-    # memory_capacity_bytes = cluster_stats.data.memory_capacity_bytes[0].value if cluster_stats.data.memory_capacity_bytes else 0
-    aggregate_hypervisor_memory_usage_ppm = get_avg_value(cluster_stats.data.aggregate_hypervisor_memory_usage_ppm)
-    overall_memory_usage_bytes = get_avg_value(cluster_stats.data.overall_memory_usage_bytes)
-
-    hypervisor_memory_usage_bytes =  round((aggregate_hypervisor_memory_usage_ppm/1000_000 * memory_capacity_bytes),2)
-    memory_available_bytes = memory_capacity_bytes - overall_memory_usage_bytes
-
-    memory_capacity_gb = round(memory_capacity_bytes / (GB_or_GiB ** 3))
-    overall_memory_usage_gb = round(overall_memory_usage_bytes / (GB_or_GiB ** 3))
-    hypervisor_memory_usage_gb = round(hypervisor_memory_usage_bytes / (GB_or_GiB ** 3))
-    ha_reserved_memory_gb = round((overall_memory_usage_gb - hypervisor_memory_usage_gb),2)
-    memory_available_gb  = round(memory_available_bytes / (GB_or_GiB ** 3))
-
-    storage_capacity_bytes = cluster_stats.data.storage_capacity_bytes[0].value
-    logical_storage_usage_bytes = get_avg_value(cluster_stats.data.logical_storage_usage_bytes)
-    storage_usage_bytes = get_avg_value(cluster_stats.data.storage_usage_bytes)
-    free_physical_storage_bytes = get_avg_value(cluster_stats.data.free_physical_storage_bytes )
-    free_logical_storage_bytes = logical_storage_usage_bytes - storage_usage_bytes
-
-    storage_capacity_gb = round(storage_capacity_bytes / (GB_or_GiB ** 3))
-    logical_storage_usage_gb = round(logical_storage_usage_bytes / (GB_or_GiB ** 3))
-    storage_usage_gb = round(storage_usage_bytes / (GB_or_GiB ** 3))
-    free_physical_storage_gb = round(free_physical_storage_bytes / (GB_or_GiB ** 3))
-    free_logical_storage_gb = logical_storage_usage_gb - storage_usage_gb
-
-    cluster_stats_details = {
-        "vcpu_capacity" : num_vcpu,
-        "vcpu_used" : num_vcpu_used,
-        "vcpu_available" : num_vcpu_available,
-        "memory_capacity_gb" : memory_capacity_gb,
-        "overall_memory_usage_gb" : overall_memory_usage_gb,
-        "hypervisor_memory_usage_gb": hypervisor_memory_usage_gb,
-        "ha_reserved_memory_gb" : ha_reserved_memory_gb,
-        "memory_available_gb" : memory_available_gb,
-        "storage_capacity_gb" : storage_capacity_gb,
-        # "logical_storage_usage_gb" : logical_storage_usage_gb,
-        "storage_usage_gb" : storage_usage_gb,
-        "free_physical_storage_gb" : free_physical_storage_gb,
-        # "free_logical_storage_gb" : free_logical_storage_gb,
-        "memory_capacity_bytes" : memory_capacity_bytes,
-        "overall_memory_usage_bytes" : overall_memory_usage_bytes,
-        "memory_available_bytes" : memory_available_bytes,
-        "storage_capacity_bytes": storage_capacity_bytes,
-        # "logical_storage_usage_bytes" : logical_storage_usage_bytes,
-        "storage_used_bytes":  storage_usage_bytes,
-        "free_physical_storage_bytes" : free_physical_storage_bytes,
-        # "free_logical_storage_bytes" : free_logical_storage_bytes
-    }
-
-    return cluster_stats_details
-
 
 def get_host_stats(clusters_api,cluster):
 

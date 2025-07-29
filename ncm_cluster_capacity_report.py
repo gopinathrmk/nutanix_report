@@ -50,7 +50,7 @@ end_time = (current_time ).strftime("%Y-%m-%dT%H:%M:%SZ")
 # start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
 # end_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")  
-start_time = (current_time - datetime.timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ") 
+start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ") 
 
 GB_or_GiB = 1024
 GB = 1000

@@ -72,6 +72,12 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
     """Extract VM network info from a VM JSON object, outputting one row per NIC/IP, not as lists."""
     rows = []
     vm_name = vm_json.get("name", "")
+    #OS = vm.guest_tools.guest_os_version if vm.guest_tools else "NA"
+    OS = vm_json.get("guest_tools", {}).get("guest_os_version", "NA") if vm_json.get("guest_tools") else "NA"
+    # if vm_name == "CTS-APP":
+    # print(vm_json)
+    # exit(0)
+#    OS ="NA"
     cluster_ext_id = ""
     cluster_name = ""
     if isinstance(vm_json.get("cluster"), dict):
@@ -81,6 +87,7 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
     if not nics:
         rows.append({
             "VM_NAME": vm_name,
+            "OS": OS,
             "MAC_ADDRESS": "",
             "IP_ADDRESS": "",
             "NIC_CONNECTED_STATUS": "",
@@ -106,6 +113,7 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
                     if ip_val:
                         rows.append({
                             "VM_NAME": vm_name,
+                             "OS": OS,
                             "MAC_ADDRESS": mac_address,
                             "IP_ADDRESS": ip_val,
                             "NIC_CONNECTED_STATUS": nic_connected,
@@ -120,6 +128,7 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
                 if ip_val and not ip_written:
                     rows.append({
                         "VM_NAME": vm_name,
+                         "OS": OS,
                         "MAC_ADDRESS": mac_address,
                         "IP_ADDRESS": ip_val,
                         "NIC_CONNECTED_STATUS": nic_connected,
@@ -130,6 +139,7 @@ def extract_vm_network_info(vm_json, pc_name, cluster_ext_map, subnet_ext_map):
                 elif not learned_ips and not ip_val:
                     rows.append({
                         "VM_NAME": vm_name,
+                         "OS": OS,
                         "MAC_ADDRESS": mac_address,
                         "IP_ADDRESS": "",
                         "NIC_CONNECTED_STATUS": nic_connected,
