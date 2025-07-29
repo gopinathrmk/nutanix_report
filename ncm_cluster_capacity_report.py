@@ -589,23 +589,6 @@ def get_vm_stats(vm_api,vm_stats_api,cluster,category_api):
             total_no_vms += 1
 
             global pc_name
-            # vm_stats_details = {
-            #     "Name" :  vm.name,
-            #     "Power State" : vm.power_state,
-            #     "vCPU" : vm_vcpu_allocated,
-            #     "Memory (GB)" : vm_mem_allocated_gb,
-            #     "Disk Space(GB)" : vm_disk_capacity_gb,
-            #     "vNIC" : vm_num_nic,
-            #     "IP Address" : vm_ip_address_list,
-            #     "OS" : OS,
-            #     "NGT Installed" : is_installed ,
-            #     "Categories" : category_list,
-            #     "Parent Cluster" : cluster.name,
-            #     "PC " : pc_name,
-            #     "host_ext_id" : host_ext_id,
-            #     "memory_usage" : vm_mem_consumed_gb
-            # }
-
             vm_stats_details = {
                 "name" :  vm.name,
                 "cluster_name" : cluster.name,
@@ -702,24 +685,24 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
 
     vm_memory_overhead_gb = round( ( (48 + (7 * tshirt_sizes.get("STD").get("Memory")) + (1 * tshirt_sizes.get("STD").get("vCPU")) ) / (GB_or_GiB) ) , 3)
 
-    vcpu_remaining_allocation = round (cluster_usable_vcpu - all_vm_stats_details.get("total_vms_vcpu_allocated"))
+    vcpu_remaining_allocation = round ((cluster_usable_vcpu * oc_ratio.get("vcpu_ratio")) - all_vm_stats_details.get("total_vms_vcpu_allocated"))
     memory_remaining_allocation = round(cluster_usable_memory_gb - all_vm_stats_details.get("total_vms_memory_gb_allocated") - all_vm_stats_details.get("total_vms_memory_overhead_gb"))
-    storage_remaining_allocation = round(cluster_usable_storage_gb - all_vm_stats_details.get("total_vms_storage_gb_allocated"))
+    storage_remaining_allocation = round((cluster_usable_storage_gb * oc_ratio.get("storage_ratio")) - all_vm_stats_details.get("total_vms_storage_gb_allocated"))
 
     vcpu_remaining_allocation = vcpu_remaining_allocation if vcpu_remaining_allocation > 0 else 0
     memory_remaining_allocation = memory_remaining_allocation if memory_remaining_allocation > 0 else 0
     storage_remaining_allocation = storage_remaining_allocation if storage_remaining_allocation > 0 else 0
 
-    vcpu_remaining_demand = cluster_stats_details.get("vcpu_available")
+    vcpu_remaining_demand = cluster_stats_details.get("vcpu_available") *  oc_ratio.get("vcpu_ratio")
     # memory_remaining_demand = cluster_stats_details.get("memory_available_gb") #shouldn't it be same as allocation 
     memory_remaining_demand = memory_remaining_allocation
-    storage_remaining_demand = cluster_stats_details.get("free_physical_storage_gb")/2 # Considering RF2 . It takes care of resilient storage as well
+    storage_remaining_demand = cluster_stats_details.get("free_physical_storage_gb")/2 * oc_ratio.get("storage_ratio") # Considering RF2 . It takes care of resilient storage as well
 
 
     vm_per_resource_allocation = {
         "vCPU" : ( (cluster_usable_vcpu * oc_ratio.get("vcpu_ratio")) - all_vm_stats_details.get("total_vms_vcpu_allocated") ) // tshirt_sizes.get("STD").get("vCPU") if ( (cluster_usable_vcpu * oc_ratio.get("vcpu_ratio"))) > all_vm_stats_details.get("total_vms_vcpu_allocated")  else 0,
         "memory" : memory_remaining_allocation // (tshirt_sizes.get("STD").get("Memory") + vm_memory_overhead_gb),
-        "storage" : (((cluster_usable_storage_gb *  oc_ratio.get("storage_ratio")) - all_vm_stats_details.get("total_vms_storage_gb_allocated") )/2) // tshirt_sizes.get("STD").get("Disk") if ((cluster_usable_storage_gb *  oc_ratio.get("storage_ratio"))) >  all_vm_stats_details.get("total_vms_storage_gb_allocated")  else 0, # Divide by 2 for RF2
+        "storage" : ((cluster_usable_storage_gb *  oc_ratio.get("storage_ratio")) - all_vm_stats_details.get("total_vms_storage_gb_allocated") ) // tshirt_sizes.get("STD").get("Disk") if ((cluster_usable_storage_gb *  oc_ratio.get("storage_ratio"))) >  all_vm_stats_details.get("total_vms_storage_gb_allocated")  else 0, # Divide by 2 for RF2
     }
 
     vm_per_resource_demand = {
@@ -745,38 +728,37 @@ def get_report(vmm_api,vmm_stats_api,storage_container_api,clusters_api,cluster,
         "VMs Remaining(Allocation)": vm_remaining_allocation,
         "VMs Remaining (Demand)" : vm_remaining_demand,
 
-        "vCPUs Remaining %(Allocation)": round (vcpu_remaining_allocation/cluster_usable_vcpu * 100),
-        "vCPU Remaining % (Demand)" : round(vcpu_remaining_demand/cluster_usable_vcpu * 100),
+        "vCPUs Remaining %(Allocation)": round (vcpu_remaining_allocation/(cluster_usable_vcpu * oc_ratio.get("vcpu_ratio"))*  100),
+        "vCPU Remaining % (Demand)" : round(vcpu_remaining_demand/(cluster_usable_vcpu * oc_ratio.get("vcpu_ratio")) * 100),
         "Memory Remaining % (Allocation)" : round(memory_remaining_allocation/cluster_usable_memory_gb * 100),
         "Memory Remaining % (Demand)" : round(memory_remaining_demand/cluster_usable_memory_gb * 100),
-        "Storage Remaining % (Allocation)" : round(storage_remaining_allocation/cluster_usable_storage_gb * 100),
-        "Storage Remaining % (Demand)" : round(storage_remaining_demand/cluster_usable_storage_gb * 100),
+        "Storage Remaining % (Allocation)" : round(storage_remaining_allocation/(cluster_usable_storage_gb * oc_ratio.get("storage_ratio")) * 100),
+        "Storage Remaining % (Demand)" : round(storage_remaining_demand/(cluster_usable_storage_gb * oc_ratio.get("storage_ratio")) * 100),
 
         "vCPUs Remaining (Allocation)" : vcpu_remaining_allocation ,
         "vCPUs Remaining (Demand)" : vcpu_remaining_demand,
-        "Memory Remaining GB (Allocation)" : memory_remaining_allocation,
-        "Memory Remaining GB (Demand)" : memory_remaining_demand,
-        "Storage Remaining GB (Allocation)" : storage_remaining_allocation ,
-        "Storage Remaining GB (Demand)" :  round(storage_remaining_demand), 
+        "Memory Remaining GiB (Allocation)" : memory_remaining_allocation,
+        "Memory Remaining GiB (Demand)" : memory_remaining_demand,
+        "Storage Remaining GiB (Allocation)" : storage_remaining_allocation ,
+        "Storage Remaining GiB (Demand)" :  round(storage_remaining_demand), 
 
-        "Usable vCPUs (Allocation)" : round (cluster_usable_vcpu) ,
-        "Usable Memory GB (Allocation)" : round(cluster_usable_memory_gb) ,
-        "Usable Storage GB (Allocation)" : round(cluster_usable_storage_gb),
+        "Usable CPU Core (Allocation)" : round (cluster_usable_vcpu) ,
+        "Usable Memory GiB (Allocation)" : round(cluster_usable_memory_gb) ,
+        "Usable Storage GiB (Allocation)" : round(cluster_usable_storage_gb),
         "vCPUs Allocated (Allocation)" : all_vm_stats_details.get("total_vms_vcpu_allocated"),
-        "Memory Allocated GB (Allocation)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
-        "Storage Allocated GB (Allocation)" : all_vm_stats_details.get("total_vms_storage_gb_allocated"), #because this doesn't include images and other storage
+        "Memory Allocated GiB (Allocation)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
+        "Storage Allocated GiB (Allocation)" : all_vm_stats_details.get("total_vms_storage_gb_allocated"), #because this doesn't include images and other storage
         
-        "Usable vCPUs (Demand)" : round (cluster_usable_vcpu) ,
-        "Usable Memory GB (Demand)" : round(cluster_usable_memory_gb) ,
-        "Usable Storage GB (Demand)" :  round(cluster_usable_storage_gb),
+        "Usable CPU Core (Demand)" : round (cluster_usable_vcpu) ,
+        "Usable Memory GiB (Demand)" : round(cluster_usable_memory_gb) ,
+        "Usable Storage GiB (Demand)" :  round(cluster_usable_storage_gb),
         "vCPUs Used (Demand)" :  cluster_stats_details.get("vcpu_used") ,
         # "Memory Used (Demand)" :  round(all_vm_stats_details.get("total_vms_memory_consumed_gb")), # No Memory Overcommit
-        "Memory Used GB (Demand)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
-        "Storage Used GB (Demand)" : cluster_stats_details.get("storage_usage_gb") ,
+        "Memory Used GiB (Demand)" : all_vm_stats_details.get("total_vms_memory_gb_allocated"),
+        "Storage Used GiB (Demand)" : cluster_stats_details.get("storage_usage_gb") ,
 
         "VM count-Capacity (Allocation)" : vm_remaining_allocation + cluster_stats_details.get("num_vms") ,
         "VM count-Capacity (Demand)" : vm_remaining_demand + cluster_stats_details.get("num_vms") 
-
 
     })
 
