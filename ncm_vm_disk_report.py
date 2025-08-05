@@ -8,7 +8,7 @@
  Last Modified : [YYYY-MM-DD]
  Version       : [v1.0.0]
  Usage         : python ncm_report.py  --pe_ip <IP> --pe_user admin --pe_secret <secret> --output_path "/home/rocky" --output_files_name <filename>
- Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib 
+ Dependencies  : pip install requests urllib3 tabulate 
                 pip install ntnx_vmm_py_client==4.0.1 ntnx_clustermgmt_py_client==4.0.1 ntnx_prism_py_client==4.0.1
 ===============================================================================
 """

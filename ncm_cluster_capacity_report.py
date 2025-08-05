@@ -8,7 +8,7 @@
  Last Modified : [2025-07-28]
  Version       : [v1.0.0]
  Usage         : ncm_cluster_capacity_report_vm.py  --pc_ip <IP> --pc_user admin --pc_secret <secret> --output_path "/home/rocky" --output_files_name <filename> --clusters <ALL|cluster1,cluster2,...>
- Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib
+ Dependencies  : pip install requests urllib3 tabulate 
                  pip install ntnx_vmm_py_client==4.0.1 ntnx_clustermgmt_py_client==4.0.1 ntnx_prism_py_client==4.0.1
 ===============================================================================
 """
@@ -55,9 +55,9 @@ start_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%
 GB_or_GiB = 1024
 GB = 1000
 GiB = 1024
-memory_margin = 1 # Fragmentation will be accounted in cluster threshold
+memory_margin = .98 # Fragmentation will be accounted in cluster threshold
 storage_margin = 0.95  #IO stops after 95% of storage capacity 
-cluster_threshold = 0.80 #80% of cluster resources will be used for VM allocation
+cluster_threshold = 1 # Cluster threshold for vCPU and Memory
 fixed_host_overhead = 3338665984
 pc_name = ""
 

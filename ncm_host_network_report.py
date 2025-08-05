@@ -8,7 +8,7 @@
  Last Modified : [YYYY-MM-DD]
  Version       : [v1.0.0]
  Usage         : python ncm_report_vm_network.py --pc_ip <IP> --pc_user admin --pc_secret <secret> --output_path "/home/rocky" --output_files_name <filename>
- Dependencies  : pip install python-csv argparse requests datetime urllib3 tabulate pathlib 
+ Dependencies  : pip install requests urllib3 tabulate 
                 pip install ntnx_vmm_py_client ntnx_clustermgmt_py_client ntnx_prism_py_client
 
 ===============================================================================
