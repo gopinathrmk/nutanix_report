@@ -41,7 +41,7 @@ import urllib3  # type: ignore
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 stat_type = DownSamplingOperator.AVG
-sampling_interval = 3600*24  # in seconds
+sampling_interval = 3600*4  # in seconds
 
 current_time = datetime.datetime.now(datetime.timezone.utc)  # Use timezone-aware UTC datetime
 end_time = (current_time ).strftime("%Y-%m-%dT%H:%M:%SZ")  
@@ -147,6 +147,9 @@ def get_host_stats(clusters_api,cluster):
 
         memory_capacity_gb =  round(memory_capacity_bytes / (GB_or_GiB ** 3),2)
         disk_size_gb = round(disk_size_bytes / (GB_or_GiB ** 3),2)
+        ipmi = host.ipmi.to_dict() if host.ipmi else {}
+        # print(ipmi) #troubleshoot
+        ip = ipmi.get("ip", {}).get("ipv4", {}).get("value", "NA") + "/" + str(ipmi.get("ip", {}).get("ipv4", {}).get("prefix_length", "NA"))
 
 #End of host info 
 
@@ -202,7 +205,7 @@ def get_host_stats(clusters_api,cluster):
             "hypervisor_full_name" : host.hypervisor.full_name,
             "ext_id" : host.ext_id,
             "cluster_name" :  cluster.name,
-            "ip" : host.ipmi.ip.ipv4.value + "/"+ str(host.ipmi.ip.ipv4.prefix_length),
+            "ip" : ip,
             "model" : host.block_model, #no Server band 
             "cpu_model" : host.cpu_model,
             "num_of_sockets" : host.number_of_cpu_sockets,
